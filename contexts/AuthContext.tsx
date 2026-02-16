@@ -37,9 +37,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
       setProfile(data);
+      return data;
     } catch (error) {
       console.error('Error fetching profile:', error);
       setProfile(null);
+      return null;
     }
   };
 
@@ -70,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     role: UserRole
   ) => {
     try {
+      console.log('Starting sign up with email:', email);
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -81,15 +84,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase auth error:', error);
+        console.error('Error details:', {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+        });
+        
+        // Provide user-friendly error message for database errors
+        if (error.message?.includes('Database error') || error.message?.includes('saving new user')) {
+          const friendlyError = new Error(
+            'Database setup required!\n\n' +
+            'Please apply the database migrations:\n\n' +
+            '1. Go to Supabase Dashboard → SQL Editor\n' +
+            '2. Run: supabase/migrations/20250217000000_initial_schema.sql\n' +
+            '3. Run: supabase/migrations/20250217000001_rls_policies.sql\n\n' +
+            'See README.md for detailed instructions.'
+          );
+          throw friendlyError;
+        }
+        
+        throw error;
+      }
 
-      // Profile will be created via database trigger or RLS policy
-      // Fetch it once the user is created
+      console.log('Sign up successful:', data.user?.id);
+
       if (data.user) {
-        await fetchProfile(data.user.id);
+        // Wait a bit for the trigger to create the profile
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        
+        // Try to fetch the profile (created by trigger)
+        let userProfile = await fetchProfile(data.user.id);
+        
+        // If profile doesn't exist, create it manually (fallback)
+        if (!userProfile) {
+          console.log('Profile not found, creating manually...');
+          const { data: insertedProfile, error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: data.user.id,
+              email: data.user.email || email,
+              full_name: fullName,
+              role,
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error('Error creating profile manually:', insertError);
+            console.error('Insert error details:', {
+              message: insertError.message,
+              code: insertError.code,
+              details: insertError.details,
+              hint: insertError.hint,
+            });
+            // Don't throw here - user is created, profile can be fixed later
+            // But log the error for debugging
+          } else {
+            // Set the newly created profile
+            setProfile(insertedProfile);
+          }
+        }
       }
     } catch (error) {
       console.error('Error signing up:', error);
+      // Error message is already formatted above if it's a database error
       throw error;
     }
   };
