@@ -16,28 +16,48 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+// User role enum
+export type UserRole = 'athlete' | 'coach' | 'admin';
+
+// User profile type
+export interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
-      // Add your table definitions here
-      // Example:
-      // profiles: {
-      //   Row: {
-      //     id: string;
-      //     email: string;
-      //     created_at: string;
-      //   };
-      //   Insert: {
-      //     id?: string;
-      //     email: string;
-      //     created_at?: string;
-      //   };
-      //   Update: {
-      //     id?: string;
-      //     email?: string;
-      //     created_at?: string;
-      //   };
-      // };
+      profiles: {
+        Row: {
+          id: string;
+          email: string;
+          full_name: string;
+          role: UserRole;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          full_name: string;
+          role: UserRole;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          full_name?: string;
+          role?: UserRole;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       // Add your view definitions here
@@ -46,7 +66,7 @@ export interface Database {
       // Add your function definitions here
     };
     Enums: {
-      // Add your enum definitions here
+      user_role: 'athlete' | 'coach' | 'admin';
     };
   };
 }
