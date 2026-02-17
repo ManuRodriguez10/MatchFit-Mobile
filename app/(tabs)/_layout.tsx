@@ -14,7 +14,7 @@ export default function TabsLayout() {
         name="team"
         options={{
           title: 'Team',
-          headerShown: true,
+          headerShown: false,
         }}
       />
       <Tabs.Screen

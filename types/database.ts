@@ -1,2 +1,68 @@
-Cannot find project ref. Have you run supabase link?
-Try rerunning the command with --debug to troubleshoot the error.
+// MatchFit Database Types
+
+export type UserRole = 'athlete' | 'coach' | 'admin';
+export type CoachRole = 'head_coach' | 'assistant_coach';
+export type PlayerPosition = 'goalkeeper' | 'defender' | 'midfielder' | 'forward';
+export type EventType = 'game' | 'practice' | 'tournament' | 'meeting';
+export type RsvpStatus = 'going' | 'not_going' | 'maybe' | 'no_response';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  onboarding_complete: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  invite_code: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamCoach {
+  id: string;
+  team_id: string;
+  coach_id: string;
+  role: CoachRole;
+  created_at: string;
+}
+
+export interface TeamPlayer {
+  id: string;
+  team_id: string;
+  player_id: string;
+  jersey_number: number | null;
+  positions: PlayerPosition[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Event {
+  id: string;
+  team_id: string;
+  event_type: EventType;
+  opponent: string | null;
+  location: string | null;
+  date: string;
+  kickoff_time: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Rsvp {
+  id: string;
+  event_id: string;
+  player_id: string;
+  status: RsvpStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}

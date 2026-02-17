@@ -14,8 +14,9 @@ interface AuthContextType {
     password: string,
     fullName: string,
     role: UserRole
-  ) => Promise<void>;
+  ) => Promise<{ needsConfirmation: boolean }>;
   signOut: () => Promise<void>;
+  completeOnboarding: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -53,13 +54,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        // User-friendly error messages
+        if (
+          error.message?.includes('Invalid login credentials') ||
+          error.message?.includes('invalid_credentials') ||
+          error.status === 400
+        ) {
+          throw new Error('Incorrect email or password. Please try again.');
+        }
+        if (error.message?.includes('Email not confirmed')) {
+          throw new Error('Please verify your email address before signing in. Check your inbox for a confirmation link.');
+        }
+        if (error.message?.includes('Too many requests')) {
+          throw new Error('Too many attempts. Please wait a moment and try again.');
+        }
+        throw new Error('Something went wrong. Please try again.');
+      }
 
       if (data.user) {
         await fetchProfile(data.user.id);
       }
     } catch (error) {
-      console.error('Error signing in:', error);
       throw error;
     }
   };
@@ -70,9 +86,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string,
     fullName: string,
     role: UserRole
-  ) => {
+  ): Promise<{ needsConfirmation: boolean }> => {
     try {
-      console.log('Starting sign up with email:', email);
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -85,41 +100,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) {
-        console.error('Supabase auth error:', error);
-        console.error('Error details:', {
-          message: error.message,
-          status: error.status,
-          name: error.name,
-        });
-        
-        // Provide user-friendly error message for database errors
-        if (error.message?.includes('Database error') || error.message?.includes('saving new user')) {
-          const friendlyError = new Error(
-            'Database setup required!\n\n' +
-            'Please apply the database migrations:\n\n' +
-            '1. Go to Supabase Dashboard → SQL Editor\n' +
-            '2. Run: supabase/migrations/20250217000000_initial_schema.sql\n' +
-            '3. Run: supabase/migrations/20250217000001_rls_policies.sql\n\n' +
-            'See README.md for detailed instructions.'
-          );
-          throw friendlyError;
+        // User-friendly error messages
+        if (
+          error.message?.includes('User already registered') ||
+          error.message?.includes('already been registered') ||
+          error.message?.includes('already registered')
+        ) {
+          throw new Error('An account with this email already exists. Please sign in instead.');
         }
-        
+
+        // Rate limit errors (security feature to prevent abuse)
+        if (
+          error.message?.includes('For security purposes') ||
+          error.message?.includes('rate limit') ||
+          error.message?.includes('too many') ||
+          error.status === 429
+        ) {
+          throw new Error('Too many signup attempts. Please wait a few minutes and try again.');
+        }
+
+        if (error.message?.includes('Database error') || error.message?.includes('saving new user')) {
+          throw new Error(
+            'Database setup required. Please apply the database migrations in Supabase.'
+          );
+        }
+
         throw error;
       }
 
-      console.log('Sign up successful:', data.user?.id);
+      // Check if email confirmation is required
+      // Supabase returns a user with no session if confirmation is needed
+      const needsConfirmation = !!data.user && !data.session;
 
-      if (data.user) {
-        // Wait a bit for the trigger to create the profile
+      if (data.user && data.session) {
+        // User is immediately logged in (email confirmation disabled)
         await new Promise((resolve) => setTimeout(resolve, 500));
-        
-        // Try to fetch the profile (created by trigger)
         let userProfile = await fetchProfile(data.user.id);
-        
-        // If profile doesn't exist, create it manually (fallback)
+
         if (!userProfile) {
-          console.log('Profile not found, creating manually...');
           const { data: insertedProfile, error: insertError } = await supabase
             .from('profiles')
             .insert({
@@ -131,25 +149,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .select()
             .single();
 
-          if (insertError) {
-            console.error('Error creating profile manually:', insertError);
-            console.error('Insert error details:', {
-              message: insertError.message,
-              code: insertError.code,
-              details: insertError.details,
-              hint: insertError.hint,
-            });
-            // Don't throw here - user is created, profile can be fixed later
-            // But log the error for debugging
-          } else {
-            // Set the newly created profile
+          if (!insertError && insertedProfile) {
             setProfile(insertedProfile);
           }
         }
       }
+
+      return { needsConfirmation };
     } catch (error) {
-      console.error('Error signing up:', error);
-      // Error message is already formatted above if it's a database error
+      throw error;
+    }
+  };
+
+  // Mark onboarding as complete for the current user
+  const completeOnboarding = async () => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ onboarding_complete: true })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      // Re-fetch profile so root layout re-evaluates routing
+      await fetchProfile(user.id);
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
       throw error;
     }
   };
@@ -210,6 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signIn,
     signUp,
     signOut,
+    completeOnboarding,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

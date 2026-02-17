@@ -5,7 +5,7 @@ import LoadingScreen from '@/components/LoadingScreen';
 import '../global.css';
 
 function RootLayoutNav() {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -13,15 +13,31 @@ function RootLayoutNav() {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inOnboardingGroup = segments[0] === '(onboarding)';
+    const inTabsGroup = segments[0] === '(tabs)';
 
-    if (!user && !inAuthGroup) {
-      // Redirect to login if not authenticated
-      router.replace('/(auth)/login');
-    } else if (user && inAuthGroup) {
-      // Redirect to tabs if authenticated
+    if (!user) {
+      // Not authenticated — always go to login
+      if (!inAuthGroup) {
+        router.replace('/(auth)/login');
+      }
+      return;
+    }
+
+    // Authenticated — check onboarding status
+    // Wait until profile is loaded before making routing decisions
+    if (!profile) return;
+
+    const needsOnboarding = profile.role === 'coach' && !profile.onboarding_complete;
+
+    if (needsOnboarding && !inOnboardingGroup) {
+      // Coach hasn't completed onboarding yet
+      router.replace('/(onboarding)');
+    } else if (!needsOnboarding && (inAuthGroup || inOnboardingGroup)) {
+      // Onboarding done or not a coach — go to main tabs
       router.replace('/(tabs)');
     }
-  }, [user, loading, segments]);
+  }, [user, profile, loading, segments]);
 
   if (loading) {
     return <LoadingScreen />;

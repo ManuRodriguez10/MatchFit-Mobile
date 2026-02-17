@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   ScrollView,
   Platform,
@@ -11,11 +10,12 @@ import {
   StatusBar,
   Image,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import Animated, {
   FadeInDown,
   FadeIn,
 } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,6 +32,8 @@ export default function SignupScreen() {
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<UserRole>('athlete');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Error states
   const [fullNameError, setFullNameError] = useState('');
@@ -106,16 +108,57 @@ export default function SignupScreen() {
 
     setLoading(true);
     try {
-      await signUp(email.trim(), password, fullName.trim(), role);
+      const { needsConfirmation } = await signUp(email.trim(), password, fullName.trim(), role);
+
+      if (needsConfirmation) {
+        setSuccessMessage(`A confirmation email has been sent to ${email.trim()}. Please verify your email, then sign in.`);
+      } else {
+        setSuccessMessage('Your account has been created successfully!');
+      }
+      setSuccess(true);
     } catch (error) {
-      Alert.alert(
-        'Sign Up Failed',
-        error instanceof Error ? error.message : 'An error occurred'
+      const message = error instanceof Error ? error.message : 'An error occurred. Please try again.';
+      setEmailError(
+        message.toLowerCase().includes('email') || message.toLowerCase().includes('account')
+          ? message
+          : ''
       );
+      if (!message.toLowerCase().includes('email') && !message.toLowerCase().includes('account')) {
+        setPasswordError(message);
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  if (success) {
+    return (
+      <>
+        <StatusBar barStyle="light-content" />
+        <LinearGradient
+          colors={Gradients.primary as unknown as string[]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradient}
+        >
+          <View style={styles.successContainer}>
+            <Animated.View entering={FadeIn.duration(600)} style={styles.successCard}>
+              <View style={styles.successIconWrap}>
+                <Ionicons name="checkmark-circle" size={72} color={Colors.success} />
+              </View>
+              <Text style={styles.successTitle}>Account Created!</Text>
+              <Text style={styles.successMessage}>{successMessage}</Text>
+              <Button
+                title="Go to Sign In"
+                onPress={() => router.replace('/(auth)/login')}
+                style={styles.successButton}
+              />
+            </Animated.View>
+          </View>
+        </LinearGradient>
+      </>
+    );
+  }
 
   return (
     <>
@@ -283,6 +326,7 @@ const styles = StyleSheet.create({
   cardContainer: {
     borderRadius: 24,
     overflow: 'hidden',
+    backgroundColor: 'transparent',
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -340,5 +384,41 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 14,
     fontWeight: '700',
+  },
+  successContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  successCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    borderRadius: 24,
+    padding: 36,
+    alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  successIconWrap: {
+    marginBottom: 20,
+  },
+  successTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  successButton: {
+    width: '100%',
   },
 });

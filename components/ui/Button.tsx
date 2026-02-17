@@ -114,6 +114,7 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: 24,
     overflow: 'hidden',
+    backgroundColor: 'transparent',
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,

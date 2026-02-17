@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   ScrollView,
   Platform,
@@ -29,6 +28,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [generalError, setGeneralError] = useState('');
   const { signIn } = useAuth();
 
   const validateEmail = (email: string) => {
@@ -59,6 +59,11 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
+    // Clear previous errors
+    setGeneralError('');
+    setEmailError('');
+    setPasswordError('');
+
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
 
@@ -69,11 +74,17 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signIn(email.trim(), password);
+      // On success, _layout.tsx handles redirect to (tabs) automatically
     } catch (error) {
-      Alert.alert(
-        'Login Failed',
-        error instanceof Error ? error.message : 'An error occurred'
-      );
+      const message = error instanceof Error ? error.message : 'An error occurred. Please try again.';
+      // Show "email not confirmed" as a general message (not tied to a field)
+      if (message.toLowerCase().includes('verify your email') || message.toLowerCase().includes('wait a moment')) {
+        setGeneralError(message);
+      } else {
+        // Wrong credentials — highlight both fields
+        setEmailError(' ');
+        setPasswordError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -117,6 +128,13 @@ export default function LoginScreen() {
                   <Text style={styles.welcomeText}>Welcome Back</Text>
                   <Text style={styles.subtitle}>Sign in to continue</Text>
 
+                  {/* General error banner */}
+                  {generalError ? (
+                    <Animated.View entering={FadeInDown.duration(300)} style={styles.errorBanner}>
+                      <Text style={styles.errorBannerText}>{generalError}</Text>
+                    </Animated.View>
+                  ) : null}
+
                   {/* Email Input */}
                   <Animated.View entering={FadeInDown.delay(400).springify()}>
                     <Input
@@ -125,7 +143,8 @@ export default function LoginScreen() {
                       value={email}
                       onChangeText={(text) => {
                         setEmail(text);
-                        if (emailError) validateEmail(text);
+                        setGeneralError('');
+                        if (emailError.trim()) validateEmail(text);
                       }}
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -143,7 +162,8 @@ export default function LoginScreen() {
                       value={password}
                       onChangeText={(text) => {
                         setPassword(text);
-                        if (passwordError) validatePassword(text);
+                        setGeneralError('');
+                        if (passwordError.trim()) validatePassword(text);
                       }}
                       secureTextEntry
                       editable={!loading}
@@ -209,6 +229,7 @@ const styles = StyleSheet.create({
   cardContainer: {
     borderRadius: 24,
     overflow: 'hidden',
+    backgroundColor: 'transparent',
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -273,5 +294,19 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 15,
     fontWeight: '700',
+  },
+  errorBanner: {
+    backgroundColor: '#FEE2E2',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.error,
+  },
+  errorBannerText: {
+    color: '#991B1B',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
   },
 });

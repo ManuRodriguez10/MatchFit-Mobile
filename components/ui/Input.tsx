@@ -53,6 +53,15 @@ export default function Input({
     onBlur?.(e);
   };
 
+  // Update label position when value changes externally
+  React.useEffect(() => {
+    if (value && !isFocused) {
+      labelPosition.value = withSpring(1, { damping: 15 });
+    } else if (!value && !isFocused) {
+      labelPosition.value = withSpring(0, { damping: 15 });
+    }
+  }, [value, isFocused]);
+
   // Shake animation for errors
   React.useEffect(() => {
     if (error) {
