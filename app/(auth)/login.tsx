@@ -1,87 +1,277 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
+  StyleSheet,
+  StatusBar,
+  Image,
+} from 'react-native';
 import { Link } from 'expo-router';
+import Animated, {
+  FadeInDown,
+  FadeIn,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useAuth } from '@/contexts/AuthContext';
+import { Colors, Gradients } from '@/constants/colors';
+import Input from '@/components/ui/Input';
+import Button from '@/components/ui/Button';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const { signIn } = useAuth();
 
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      setEmailError('Email is required');
+      return false;
+    }
+    if (!emailRegex.test(email)) {
+      setEmailError('Please enter a valid email');
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
+
+  const validatePassword = (password: string) => {
+    if (!password) {
+      setPasswordError('Password is required');
+      return false;
+    }
+    if (password.length < 6) {
+      setPasswordError('Password must be at least 6 characters');
+      return false;
+    }
+    setPasswordError('');
+    return true;
+  };
+
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
+
+    if (!isEmailValid || !isPasswordValid) {
       return;
     }
 
     setLoading(true);
     try {
-      await signIn(email, password);
+      await signIn(email.trim(), password);
     } catch (error) {
-      Alert.alert('Login Failed', error instanceof Error ? error.message : 'An error occurred');
+      Alert.alert(
+        'Login Failed',
+        error instanceof Error ? error.message : 'An error occurred'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View className="flex-1 bg-white px-6 justify-center">
-      {/* Header */}
-      <View className="mb-8">
-        <Text className="text-4xl font-bold text-blue-600 mb-2">MatchFit</Text>
-        <Text className="text-gray-600">Sign in to your account</Text>
-      </View>
-
-      {/* Email Input */}
-      <View className="mb-4">
-        <Text className="text-gray-700 font-semibold mb-2">Email</Text>
-        <TextInput
-          className="border border-gray-300 rounded-lg px-4 py-3 bg-gray-50"
-          placeholder="Enter your email"
-          value={email}
-          onChangeText={setEmail}
-          editable={!loading}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-      </View>
-
-      {/* Password Input */}
-      <View className="mb-6">
-        <Text className="text-gray-700 font-semibold mb-2">Password</Text>
-        <TextInput
-          className="border border-gray-300 rounded-lg px-4 py-3 bg-gray-50"
-          placeholder="Enter your password"
-          value={password}
-          onChangeText={setPassword}
-          editable={!loading}
-          secureTextEntry
-        />
-      </View>
-
-      {/* Login Button */}
-      <TouchableOpacity
-        onPress={handleLogin}
-        disabled={loading}
-        className="bg-blue-600 py-3 rounded-lg mb-4 active:bg-blue-700"
+    <>
+      <StatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={Gradients.primary as unknown as string[]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
       >
-        {loading ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text className="text-white font-bold text-center text-lg">Sign In</Text>
-        )}
-      </TouchableOpacity>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Form Card */}
+            <Animated.View
+              entering={FadeInDown.delay(200).springify()}
+              style={styles.cardContainer}
+            >
+              <BlurView intensity={40} tint="light" style={styles.blurContainer}>
+                <View style={styles.card}>
 
-      {/* Sign Up Link */}
-      <View className="flex-row justify-center">
-        <Text className="text-gray-600">Don't have an account? </Text>
-        <Link href="/(auth)/signup" asChild>
-          <TouchableOpacity>
-            <Text className="text-blue-600 font-semibold">Sign Up</Text>
-          </TouchableOpacity>
-        </Link>
-      </View>
-    </View>
+                  {/* Logo inside card, above Welcome Back */}
+                  <Animated.View entering={FadeIn.duration(800)} style={styles.logoSection}>
+                    <Image
+                      source={require('@/assets/logo-full.png')}
+                      style={styles.logoImage}
+                      resizeMode="contain"
+                    />
+                  </Animated.View>
+
+                  <Text style={styles.welcomeText}>Welcome Back</Text>
+                  <Text style={styles.subtitle}>Sign in to continue</Text>
+
+                  {/* Email Input */}
+                  <Animated.View entering={FadeInDown.delay(400).springify()}>
+                    <Input
+                      label="Email"
+                      icon="mail-outline"
+                      value={email}
+                      onChangeText={(text) => {
+                        setEmail(text);
+                        if (emailError) validateEmail(text);
+                      }}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      editable={!loading}
+                      error={emailError}
+                      containerStyle={styles.inputContainer}
+                    />
+                  </Animated.View>
+
+                  {/* Password Input */}
+                  <Animated.View entering={FadeInDown.delay(500).springify()}>
+                    <Input
+                      label="Password"
+                      icon="lock-closed-outline"
+                      value={password}
+                      onChangeText={(text) => {
+                        setPassword(text);
+                        if (passwordError) validatePassword(text);
+                      }}
+                      secureTextEntry
+                      editable={!loading}
+                      error={passwordError}
+                      containerStyle={styles.inputContainer}
+                    />
+                  </Animated.View>
+
+                  {/* Forgot Password — centered */}
+                  <Animated.View entering={FadeInDown.delay(600).springify()} style={styles.forgotPasswordContainer}>
+                    <TouchableOpacity>
+                      <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+
+                  {/* Sign In Button */}
+                  <Animated.View entering={FadeInDown.delay(700).springify()}>
+                    <Button
+                      title="Sign In"
+                      onPress={handleLogin}
+                      loading={loading}
+                      disabled={loading}
+                      style={styles.signInButton}
+                    />
+                  </Animated.View>
+
+                  {/* Sign Up Link */}
+                  <Animated.View
+                    entering={FadeInDown.delay(800).springify()}
+                    style={styles.signUpContainer}
+                  >
+                    <Text style={styles.signUpText}>Don't have an account? </Text>
+                    <Link href="/(auth)/signup" asChild>
+                      <TouchableOpacity>
+                        <Text style={styles.signUpLink}>Sign Up</Text>
+                      </TouchableOpacity>
+                    </Link>
+                  </Animated.View>
+                </View>
+              </BlurView>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
+    </>
   );
 }
+
+const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 40,
+    justifyContent: 'center',
+  },
+  cardContainer: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  blurContainer: {
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 28,
+    borderRadius: 24,
+  },
+  logoSection: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logoImage: {
+    width: 180,
+    height: 60,
+  },
+  welcomeText: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  forgotPasswordContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  forgotPasswordText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  signInButton: {
+    marginBottom: 20,
+  },
+  signUpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  signUpText: {
+    color: Colors.textSecondary,
+    fontSize: 15,
+  },
+  signUpLink: {
+    color: Colors.primary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+});
