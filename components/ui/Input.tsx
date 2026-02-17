@@ -53,15 +53,6 @@ export default function Input({
     onBlur?.(e);
   };
 
-  // Update label position when value changes externally
-  React.useEffect(() => {
-    if (value && !isFocused) {
-      labelPosition.value = withSpring(1, { damping: 15 });
-    } else if (!value && !isFocused) {
-      labelPosition.value = withSpring(0, { damping: 15 });
-    }
-  }, [value, isFocused]);
-
   // Shake animation for errors
   React.useEffect(() => {
     if (error) {
@@ -122,15 +113,12 @@ export default function Input({
         )}
 
         <View style={styles.inputWrapper}>
-          <Animated.Text style={[styles.label, animatedLabelStyle]}>
-            {label}
-          </Animated.Text>
-
           <TextInput
             style={styles.input}
             value={value}
             onFocus={handleFocus}
             onBlur={handleBlur}
+            placeholder={label}
             placeholderTextColor={Colors.textSecondary}
             secureTextEntry={secureTextEntry && !isPasswordVisible}
             {...props}

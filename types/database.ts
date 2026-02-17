@@ -12,6 +12,14 @@ export interface UserProfile {
   full_name: string;
   role: UserRole;
   onboarding_complete: boolean;
+  first_name: string | null;
+  last_name: string | null;
+  date_of_birth: string | null;
+  nationality: string | null;
+  phone: string | null;
+  height_ft: number | null;
+  height_in: number | null;
+  weight_lbs: number | null;
   created_at: string;
   updated_at: string;
 }

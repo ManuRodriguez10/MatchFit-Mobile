@@ -55,7 +55,7 @@ export default function OnboardingWelcomeScreen() {
 
         {/* Welcome heading */}
         <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.headingSection}>
-          <Text style={styles.welcomeText}>Welcome, Coach {firstName}! 👋</Text>
+          <Text style={styles.welcomeText}>Welcome, Coach 👋</Text>
           <Text style={styles.subText}>Let's get you set up</Text>
         </Animated.View>
 
@@ -64,15 +64,6 @@ export default function OnboardingWelcomeScreen() {
           <BlurView intensity={40} tint="light" style={styles.blurContainer}>
             <View style={styles.card}>
               <Text style={styles.cardTitle}>What would you like to do?</Text>
-
-              {/* MatchFit icon inside card */}
-              <View style={styles.cardIconRow}>
-                <Image
-                  source={require('@/assets/logo-icon.png')}
-                  style={styles.cardIconImg}
-                  resizeMode="contain"
-                />
-              </View>
 
               {/* Option A: Create a New Team */}
               <TouchableOpacity
@@ -130,15 +121,6 @@ export default function OnboardingWelcomeScreen() {
                   <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" />
                 </LinearGradient>
               </TouchableOpacity>
-
-              {/* MatchFit icon — below Join an Existing Team */}
-              <View style={styles.cardIconRow}>
-                <Image
-                  source={require('@/assets/logo-icon.png')}
-                  style={styles.cardIconImg}
-                  resizeMode="contain"
-                />
-              </View>
             </View>
           </BlurView>
         </Animated.View>

@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Platform,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -117,7 +118,7 @@ export default function OnboardingCreateTeamScreen() {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Header */}
+          {/* Header with icon */}
           <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.headerSection}>
             <LinearGradient
               colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
@@ -135,6 +136,15 @@ export default function OnboardingCreateTeamScreen() {
           <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.cardContainer}>
             <BlurView intensity={40} tint="light" style={styles.blurContainer}>
               <View style={styles.card}>
+                {/* MatchFit Icon inside card */}
+                <View style={styles.cardIconRow}>
+                  <Image
+                    source={require('@/assets/logo-icon.png')}
+                    style={styles.cardIconImg}
+                    resizeMode="contain"
+                  />
+                </View>
+
                 {/* General error */}
                 {generalError ? (
                   <View style={styles.errorBanner}>
@@ -240,6 +250,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
+  },
+  cardIconRow: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  cardIconImg: {
+    width: 40,
+    height: 40,
   },
   title: {
     fontSize: 26,

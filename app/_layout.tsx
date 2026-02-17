@@ -28,13 +28,18 @@ function RootLayoutNav() {
     // Wait until profile is loaded before making routing decisions
     if (!profile) return;
 
-    const needsOnboarding = profile.role === 'coach' && !profile.onboarding_complete;
+    const needsOnboarding = !profile.onboarding_complete &&
+      (profile.role === 'coach' || profile.role === 'athlete');
 
     if (needsOnboarding && !inOnboardingGroup) {
-      // Coach hasn't completed onboarding yet
-      router.replace('/(onboarding)');
+      // Route to onboarding (coaches start at index, athletes go directly to player-join-team)
+      if (profile.role === 'athlete') {
+        router.replace('/(onboarding)/player-join-team');
+      } else {
+        router.replace('/(onboarding)');
+      }
     } else if (!needsOnboarding && (inAuthGroup || inOnboardingGroup)) {
-      // Onboarding done or not a coach — go to main tabs
+      // Onboarding done — go to main tabs
       router.replace('/(tabs)');
     }
   }, [user, profile, loading, segments]);

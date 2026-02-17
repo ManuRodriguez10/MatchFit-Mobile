@@ -11,6 +11,13 @@ export default function TeamLayout() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="join"
+        options={{
+          presentation: 'modal',
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

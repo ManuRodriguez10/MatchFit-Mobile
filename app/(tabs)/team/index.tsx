@@ -52,6 +52,21 @@ export default function TeamScreen() {
           <Text style={styles.subtitle}>
             Ask your coach for an invite code to join their team
           </Text>
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={() => router.push('/team/join')}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={Gradients.primary as unknown as string[]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.createButtonGradient}
+            >
+              <Ionicons name="enter-outline" size={20} color="#fff" />
+              <Text style={styles.createButtonText}>Join Team</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </Animated.View>
       )}
     </View>

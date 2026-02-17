@@ -7,6 +7,8 @@ export default function OnboardingLayout() {
       <Stack.Screen name="create-team" />
       <Stack.Screen name="join-team" />
       <Stack.Screen name="invite-code" />
+      <Stack.Screen name="player-join-team" />
+      <Stack.Screen name="complete-profile" />
     </Stack>
   );
 }
