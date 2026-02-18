@@ -193,7 +193,7 @@ export default function SignupScreen() {
                     {/* Icon between title and subtitle */}
                     <View style={styles.iconSection}>
                       <Image
-                        source={require('@/assets/logo-icon.png')}
+                        source={require('../../assets/logo-icon.png')}
                         style={styles.iconImage}
                         resizeMode="contain"
                       />

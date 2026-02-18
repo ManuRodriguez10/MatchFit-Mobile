@@ -46,7 +46,7 @@ export default function OnboardingWelcomeScreen() {
         <Animated.View entering={FadeIn.duration(600)} style={styles.logoSection}>
           <View style={styles.logoWhiteWrap}>
             <Image
-              source={require('@/assets/logo-full.png')}
+              source={require('../../assets/logo-full.png')}
               style={styles.logoFull}
               resizeMode="contain"
             />

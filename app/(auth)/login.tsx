@@ -119,7 +119,7 @@ export default function LoginScreen() {
                   {/* Logo inside card, above Welcome Back */}
                   <Animated.View entering={FadeIn.duration(800)} style={styles.logoSection}>
                     <Image
-                      source={require('@/assets/logo-full.png')}
+                      source={require('../../assets/logo-full.png')}
                       style={styles.logoImage}
                       resizeMode="contain"
                     />

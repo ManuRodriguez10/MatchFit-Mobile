@@ -143,7 +143,7 @@ export default function TeamScreen() {
           <View style={styles.heroTopRow}>
             <View style={styles.brandBlock}>
               <View style={styles.logoGrid}>
-                <Image source={require('@/assets/logo-icon.png')} style={styles.logo} resizeMode="contain" />
+                <Image source={require('../../assets/logo-icon.png')} style={styles.logo} resizeMode="contain" />
               </View>
               <Text style={styles.greeting}>
                 {getGreeting()}{firstName ? `, ${firstName}` : ''}!

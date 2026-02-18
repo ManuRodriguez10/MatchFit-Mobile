@@ -130,7 +130,7 @@ export default function PlayerJoinTeamScreen() {
                 {/* MatchFit Icon inside card */}
                 <View style={styles.cardIconRow}>
                   <Image
-                    source={require('@/assets/logo-icon.png')}
+                    source={require('../../assets/logo-icon.png')}
                     style={styles.cardIconImg}
                     resizeMode="contain"
                   />

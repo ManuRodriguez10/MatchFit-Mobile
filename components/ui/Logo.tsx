@@ -52,8 +52,8 @@ export default function Logo({ variant, showTagline = true }: LogoProps) {
 
   const logoSource =
     variant === 'icon'
-      ? require('@/assets/logo-icon.png')
-      : require('@/assets/logo-full.png');
+      ? require('../../assets/logo-icon.png')
+      : require('../../assets/logo-full.png');
 
   const logoSize = variant === 'icon' ? { width: 80, height: 80 } : { width: 200, height: undefined };
 
