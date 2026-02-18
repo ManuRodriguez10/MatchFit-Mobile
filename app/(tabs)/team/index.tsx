@@ -1,138 +1,446 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  Image,
+} from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
+import TeamCard from '@/components/TeamCard';
 import { Colors, Gradients } from '@/constants/colors';
+import { TeamWithUserRole, CoachRole } from '@/types/database';
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function getInitials(fullName: string): string {
+  const parts = fullName.trim().split(' ').filter(Boolean);
+  if (parts.length >= 2) {
+    return ((parts[0][0] ?? '') + (parts[parts.length - 1][0] ?? '')).toUpperCase();
+  }
+  return fullName.slice(0, 2).toUpperCase();
+}
 
 export default function TeamScreen() {
-  const { profile } = useAuth();
+  const { user, profile, signOut } = useAuth();
+  const [teams, setTeams] = useState<TeamWithUserRole[]>([]);
+  const [loading, setLoading] = useState(true);
   const isCoach = profile?.role === 'coach' || profile?.role === 'admin';
 
+  const firstName = profile?.first_name ?? profile?.full_name?.split(' ')[0] ?? '';
+  const initials = profile?.full_name ? getInitials(profile.full_name) : '?';
+
+  const fetchTeams = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const results: TeamWithUserRole[] = [];
+
+      if (isCoach) {
+        const { data, error } = await supabase
+          .from('team_coaches')
+          .select('role, team:teams(id, name, invite_code)')
+          .eq('coach_id', user.id);
+
+        if (error) throw error;
+
+        for (const row of data ?? []) {
+          const team = row.team as { id: string; name: string; invite_code: string } | null;
+          if (!team) continue;
+
+          const [coachRes, playerRes] = await Promise.all([
+            supabase.from('team_coaches').select('id', { count: 'exact', head: true }).eq('team_id', team.id),
+            supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', team.id),
+          ]);
+          const memberCount = (coachRes.count ?? 0) + (playerRes.count ?? 0);
+
+          results.push({
+            teamId: team.id,
+            teamName: team.name,
+            inviteCode: team.invite_code,
+            memberCount,
+            userRole: row.role as CoachRole,
+          });
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('team_players')
+          .select('team:teams(id, name, invite_code)')
+          .eq('player_id', user.id);
+
+        if (error) throw error;
+
+        for (const row of data ?? []) {
+          const team = row.team as { id: string; name: string; invite_code: string } | null;
+          if (!team) continue;
+
+          const [coachRes, playerRes] = await Promise.all([
+            supabase.from('team_coaches').select('id', { count: 'exact', head: true }).eq('team_id', team.id),
+            supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', team.id),
+          ]);
+          const memberCount = (coachRes.count ?? 0) + (playerRes.count ?? 0);
+
+          results.push({
+            teamId: team.id,
+            teamName: team.name,
+            inviteCode: team.invite_code,
+            memberCount,
+            userRole: 'player',
+          });
+        }
+      }
+
+      setTeams(results);
+    } catch (err) {
+      console.error('fetchTeams error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, isCoach]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchTeams();
+    }, [fetchTeams])
+  );
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch {
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
+  };
+
   return (
-    <View style={styles.container}>
-      {isCoach ? (
-        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.content}>
-          <LinearGradient
-            colors={Gradients.primary as unknown as string[]}
-            style={styles.iconContainer}
-          >
-            <Ionicons name="people" size={40} color="#fff" />
-          </LinearGradient>
-          <Text style={styles.title}>Manage Your Team</Text>
-          <Text style={styles.subtitle}>
-            Create a team and invite your players with a unique code
+    <LinearGradient
+      colors={Gradients.primary as unknown as string[]}
+      style={styles.gradient}
+      start={{ x: 0.1, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+    >
+      {/* Decorative circles */}
+      <View style={styles.decorCircle1} />
+      <View style={styles.decorCircle2} />
+
+      {/* Header */}
+      <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.brandBlock}>
+              <View style={styles.logoGrid}>
+                <Image source={require('@/assets/logo-icon.png')} style={styles.logo} resizeMode="contain" />
+              </View>
+              <Text style={styles.greeting}>
+                {getGreeting()}{firstName ? `, ${firstName}` : ''}!
+              </Text>
+            </View>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </View>
+          </View>
+        </View>
+
+        <Text style={styles.headerTitle}>My Teams</Text>
+
+        {isCoach && (
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => router.push('/team/create')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle-outline" size={16} color="#fff" />
+              <Text style={styles.actionText}>Create Team</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => router.push('/team/join')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="enter-outline" size={16} color="#fff" />
+              <Text style={styles.actionText}>Join Team</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </Animated.View>
+
+      {/* Content */}
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.loadingText}>Loading teams...</Text>
+        </View>
+      ) : teams.length === 0 ? (
+        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.emptyState}>
+          <View style={styles.emptyIcon}>
+            <Ionicons name={isCoach ? 'people' : 'people-outline'} size={40} color="rgba(255,255,255,0.6)" />
+          </View>
+          <Text style={styles.emptyTitle}>
+            {isCoach ? 'No teams yet' : 'Not on a team yet'}
+          </Text>
+          <Text style={styles.emptySubtitle}>
+            {isCoach
+              ? 'Create a team and invite your players with a unique code'
+              : 'Ask your coach for an invite code to join their team'}
           </Text>
           <TouchableOpacity
-            style={styles.createButton}
-            onPress={() => router.push('/team/create')}
+            style={styles.ctaButton}
+            onPress={() => router.push(isCoach ? '/team/create' : '/team/join')}
             activeOpacity={0.85}
           >
-            <LinearGradient
-              colors={Gradients.primary as unknown as string[]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.createButtonGradient}
-            >
-              <Ionicons name="add-circle-outline" size={20} color="#fff" />
-              <Text style={styles.createButtonText}>Create Team</Text>
-            </LinearGradient>
+            <View style={styles.ctaInner}>
+              <Ionicons
+                name={isCoach ? 'add-circle-outline' : 'enter-outline'}
+                size={20}
+                color="#fff"
+              />
+              <Text style={styles.ctaText}>{isCoach ? 'Create Team' : 'Join Team'}</Text>
+            </View>
           </TouchableOpacity>
         </Animated.View>
       ) : (
-        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.content}>
-          <LinearGradient
-            colors={Gradients.primary as unknown as string[]}
-            style={styles.iconContainer}
-          >
-            <Ionicons name="people-outline" size={40} color="#fff" />
-          </LinearGradient>
-          <Text style={styles.title}>Join a Team</Text>
-          <Text style={styles.subtitle}>
-            Ask your coach for an invite code to join their team
-          </Text>
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={() => router.push('/team/join')}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={Gradients.primary as unknown as string[]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.createButtonGradient}
+        <ScrollView
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+        >
+          {teams.map((team, index) => (
+            <Animated.View
+              key={team.teamId}
+              entering={FadeInDown.delay(index * 80).springify()}
             >
-              <Ionicons name="enter-outline" size={20} color="#fff" />
-              <Text style={styles.createButtonText}>Join Team</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
+              <TeamCard
+                teamId={team.teamId}
+                teamName={team.teamName}
+                memberCount={team.memberCount}
+                userRole={team.userRole}
+                inviteCode={team.inviteCode}
+                onPress={() => router.push(`/team/${team.teamId}/roster`)}
+              />
+            </Animated.View>
+          ))}
+        </ScrollView>
       )}
-    </View>
+
+      {/* Sign out — bottom of screen */}
+      <Animated.View entering={FadeIn.delay(200).duration(400)} style={styles.footer}>
+        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.8}>
+          <Ionicons name="log-out-outline" size={16} color="#fff" />
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  gradient: {
     flex: 1,
-    backgroundColor: Colors.background,
+  },
+  decorCircle1: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    top: -80,
+    right: -60,
+  },
+  decorCircle2: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    bottom: 80,
+    left: -40,
+  },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 72 : 44,
+    paddingHorizontal: 24,
+    paddingBottom: 22,
+    gap: 20,
+  },
+  heroCard: {
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  brandBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  logoGrid: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  content: {
-    alignItems: 'center',
-    width: '100%',
+  logo: {
+    width: 28,
+    height: 28,
   },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  greeting: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#fff',
+    flex: 1,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 10,
-    textAlign: 'center',
+  avatarText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
   },
-  subtitle: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
-    paddingHorizontal: 8,
+  footer: {
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    paddingTop: 8,
   },
-  createButton: {
-    width: '100%',
-    borderRadius: 14,
-    overflow: 'hidden',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  createButtonGradient: {
+  signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    gap: 8,
+    backgroundColor: Colors.error,
+    borderRadius: 14,
+    paddingVertical: 13,
+    shadowColor: Colors.error,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  signOutText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  actionText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 15,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 12,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.7)',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  ctaButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  ctaInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
     gap: 8,
   },
-  createButtonText: {
+  ctaText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  list: {
+    padding: 20,
+    paddingTop: 18,
   },
 });

@@ -15,16 +15,11 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Gradients } from '@/constants/colors';
+import { lookupTeamByInviteCode } from '@/lib/teamInvite';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
-
-interface TeamData {
-  id: string;
-  name: string;
-}
 
 export default function PlayerJoinTeamScreen() {
   const { user, signOut } = useAuth();
@@ -58,22 +53,21 @@ export default function PlayerJoinTeamScreen() {
     setLoading(true);
     setGeneralError('');
 
-    const cleaned = inviteCode.trim().toUpperCase();
-
     try {
-      // Use SECURITY DEFINER function to look up team by invite code
-      const { data, error } = await supabase.rpc('find_team_by_invite_code', {
-        p_code: cleaned,
-      });
-
-      if (error || !data || data.length === 0) {
-        setCodeError('Invalid code. Please check and try again.');
+      const lookup = await lookupTeamByInviteCode(inviteCode);
+      if (!lookup.ok) {
+        if (lookup.reason === 'invalid_code') {
+          setCodeError('Invalid code. Please check and try again.');
+        } else {
+          setGeneralError(lookup.message ?? 'Unable to validate team code. Please try again.');
+        }
+        console.error('Invite code lookup failed:', lookup);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setLoading(false);
         return;
       }
 
-      const team = data[0] as TeamData;
+      const team = lookup.team;
 
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 

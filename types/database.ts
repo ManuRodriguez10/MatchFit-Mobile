@@ -74,3 +74,26 @@ export interface Rsvp {
   created_at: string;
   updated_at: string;
 }
+
+// ── Composite types for joined Supabase queries ───────────────
+
+export interface TeamCoachWithProfile {
+  id: string;
+  role: CoachRole;
+  profile: Pick<UserProfile, 'id' | 'full_name' | 'email'>;
+}
+
+export interface TeamPlayerWithProfile {
+  id: string;
+  jersey_number: number | null;
+  positions: PlayerPosition[];
+  profile: Pick<UserProfile, 'id' | 'full_name' | 'email'>;
+}
+
+export interface TeamWithUserRole {
+  teamId: string;
+  teamName: string;
+  inviteCode: string;
+  memberCount: number;
+  userRole: CoachRole | 'player';
+}

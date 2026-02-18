@@ -6,8 +6,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          headerShown: true,
+          href: null,
         }}
       />
       <Tabs.Screen
@@ -15,6 +14,7 @@ export default function TabsLayout() {
         options={{
           title: 'Team',
           headerShown: false,
+          tabBarStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen

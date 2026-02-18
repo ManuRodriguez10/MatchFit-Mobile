@@ -39,8 +39,8 @@ function RootLayoutNav() {
         router.replace('/(onboarding)');
       }
     } else if (!needsOnboarding && (inAuthGroup || inOnboardingGroup)) {
-      // Onboarding done — go to main tabs
-      router.replace('/(tabs)');
+      // Onboarding done — go to teams
+      router.replace('/(tabs)/team');
     }
   }, [user, profile, loading, segments]);
 

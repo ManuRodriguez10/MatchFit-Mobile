@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '@/lib/supabase';
+import { lookupTeamByInviteCode } from '@/lib/teamInvite';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Gradients } from '@/constants/colors';
 import Input from '@/components/ui/Input';
@@ -47,21 +48,20 @@ export default function JoinTeamScreen() {
     setLoading(true);
     setGeneralError('');
 
-    const cleaned = inviteCode.trim().toUpperCase();
-
     try {
-      // Look up team by invite code
-      const { data: team, error: teamError } = await supabase
-        .from('teams')
-        .select('id, name')
-        .eq('invite_code', cleaned)
-        .single();
-
-      if (teamError || !team) {
-        setCodeError('Invalid code. Please check and try again.');
+      const lookup = await lookupTeamByInviteCode(inviteCode);
+      if (!lookup.ok) {
+        if (lookup.reason === 'invalid_code') {
+          setCodeError('Invalid code. Please check and try again.');
+        } else {
+          setGeneralError(lookup.message ?? 'Unable to validate team code. Please try again.');
+        }
+        console.error('Invite code lookup failed:', lookup);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
+
+      const team = lookup.team;
 
       // Check if already a member of this team
       const { data: existing } = await supabase
