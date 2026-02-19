@@ -14,7 +14,7 @@ import { Link } from 'expo-router';
 import Animated, {
   FadeInDown,
   FadeIn,
-} from 'react-native-reanimated';
+} from '@/utils/reanimated-shim';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useAuth } from '@/contexts/AuthContext';

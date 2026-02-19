@@ -6,7 +6,7 @@ import Animated, {
   withSpring,
   withRepeat,
   withSequence,
-} from 'react-native-reanimated';
+} from '@/utils/reanimated-shim';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 

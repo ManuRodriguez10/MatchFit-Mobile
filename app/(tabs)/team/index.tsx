@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from '@/utils/reanimated-shim';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
@@ -143,9 +143,14 @@ export default function TeamScreen() {
           <View style={styles.heroTopRow}>
             <View style={styles.brandBlock}>
               <View style={styles.logoGrid}>
-                <Image source={require('../../assets/logo-icon.png')} style={styles.logo} resizeMode="contain" />
+                <Image source={require('../../../assets/logo-icon.png')} style={styles.logo} resizeMode="contain" />
               </View>
-              <Text style={styles.greeting}>
+              <Text
+                style={styles.greeting}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.82}
+              >
                 {getGreeting()}{firstName ? `, ${firstName}` : ''}!
               </Text>
             </View>
@@ -229,7 +234,7 @@ export default function TeamScreen() {
                 memberCount={team.memberCount}
                 userRole={team.userRole}
                 inviteCode={team.inviteCode}
-                onPress={() => router.push(`/team/${team.teamId}/roster`)}
+                onPress={() => router.push(`/team/${team.teamId}`)}
               />
             </Animated.View>
           ))}
@@ -294,6 +299,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     flex: 1,
+    paddingRight: 14,
   },
   logoGrid: {
     width: 44,
@@ -313,10 +319,11 @@ const styles = StyleSheet.create({
     height: 28,
   },
   greeting: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#fff',
     flex: 1,
+    flexShrink: 1,
   },
   avatar: {
     width: 50,

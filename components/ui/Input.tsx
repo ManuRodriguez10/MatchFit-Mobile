@@ -12,7 +12,7 @@ import Animated, {
   useSharedValue,
   withSpring,
   withSequence,
-} from 'react-native-reanimated';
+} from '@/utils/reanimated-shim';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useLayoutEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,8 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { useLocalSearchParams, router, useNavigation } from 'expo-router';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { useLocalSearchParams, router } from 'expo-router';
+import Animated, { FadeInDown, FadeIn } from '@/utils/reanimated-shim';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
@@ -115,18 +115,8 @@ function RosterMemberItem({
 
 export default function RosterScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
-  const { user, profile } = useAuth();
-  const navigation = useNavigation();
+  const { profile } = useAuth();
   const isCoach = profile?.role === 'coach' || profile?.role === 'admin';
-
-  // Show the tab bar when on the roster screen, hide it when we leave
-  useLayoutEffect(() => {
-    const parent = navigation.getParent();
-    parent?.setOptions({ tabBarStyle: { display: 'flex' } });
-    return () => {
-      parent?.setOptions({ tabBarStyle: { display: 'none' } });
-    };
-  }, [navigation]);
 
   const [team, setTeam] = useState<{ id: string; name: string; invite_code: string } | null>(null);
   const [coaches, setCoaches] = useState<TeamCoachWithProfile[]>([]);

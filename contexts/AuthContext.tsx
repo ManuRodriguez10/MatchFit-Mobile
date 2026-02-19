@@ -197,20 +197,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Listen for auth state changes
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
+    let initialised = false;
+
+    // Get initial session and validate it
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        // Verify the session is still valid by calling getUser (makes a network request)
+        const { data: { user: verifiedUser }, error } = await supabase.auth.getUser();
+        if (error || !verifiedUser) {
+          // Stale/expired session — clear it and don't set user
+          await supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+        } else {
+          setSession(session);
+          setUser(verifiedUser);
+          await fetchProfile(verifiedUser.id);
+        }
       }
+      initialised = true;
       setLoading(false);
     });
 
-    // Listen for auth changes
+    // Listen for auth changes (skip events before initial validation)
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!initialised && event === 'INITIAL_SESSION') return;
+
       setSession(session);
       setUser(session?.user ?? null);
 
