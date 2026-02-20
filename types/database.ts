@@ -55,12 +55,14 @@ export interface Event {
   id: string;
   team_id: string;
   event_type: EventType;
+  title: string | null;
   opponent: string | null;
   location: string | null;
   date: string;
   kickoff_time: string | null;
   notes: string | null;
   created_by: string;
+  recurrence_group_id: string | null;
   created_at: string;
   updated_at: string;
 }

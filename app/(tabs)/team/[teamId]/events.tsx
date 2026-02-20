@@ -1,21 +1,71 @@
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity,
+  Modal,
+  Pressable,
+} from 'react-native';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { Colors, Gradients } from '@/constants/colors';
 
+// ---------------------------------------------------------------------------
+// Types & constants
+// ---------------------------------------------------------------------------
+
 interface EventItem {
   id: string;
   event_type: 'game' | 'practice' | 'tournament' | 'meeting';
+  title: string | null;
   opponent: string | null;
   location: string | null;
   date: string;
   kickoff_time: string | null;
 }
 
-function formatDate(isoDate: string) {
+const EVENT_COLORS: Record<EventItem['event_type'], string> = {
+  game: '#EF4444',
+  practice: '#3B82F6',
+  tournament: '#F59E0B',
+  meeting: '#8B5CF6',
+};
+
+type TabKey = 'calendar' | 'week' | 'past';
+const TAB_KEYS: TabKey[] = ['calendar', 'week', 'past'];
+
+const TAB_LABELS: Record<TabKey, string> = {
+  calendar: 'Calendar',
+  week: 'This Week',
+  past: 'Past',
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getWeekRange(d: Date): { start: Date; end: Date } {
+  const day = d.getDay(); // 0=Sun
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const start = new Date(d);
+  start.setDate(d.getDate() + diffToMon);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function toISO(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function formatDisplayDate(isoDate: string): string {
   return new Date(`${isoDate}T00:00:00`).toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
@@ -23,34 +73,372 @@ function formatDate(isoDate: string) {
   });
 }
 
+function formatShortDate(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+interface DayCell {
+  date: string; // ISO
+  dayOfMonth: number;
+  isCurrentMonth: boolean;
+}
+
+function getMonthDays(year: number, month: number): DayCell[] {
+  const first = new Date(year, month, 1);
+  const startDay = first.getDay(); // 0=Sun
+  const offsetToMon = startDay === 0 ? -6 : 1 - startDay;
+  const gridStart = new Date(year, month, 1 + offsetToMon);
+
+  const cells: DayCell[] = [];
+  const weeks = 6; // always render 6 rows for consistent height
+  for (let i = 0; i < weeks * 7; i++) {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    cells.push({
+      date: toISO(d),
+      dayOfMonth: d.getDate(),
+      isCurrentMonth: d.getMonth() === month && d.getFullYear() === year,
+    });
+  }
+  return cells;
+}
+
+function eventTitle(event: EventItem): string {
+  if (event.title?.trim()) return event.title.trim();
+  if (event.event_type === 'game' && event.opponent) return `vs ${event.opponent}`;
+  return event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1);
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export default function TeamEventsScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [activeTab, setActiveTab] = useState<TabKey>('calendar');
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
+  const [selectedWeekDay, setSelectedWeekDay] = useState<string | null>(null);
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-
-  useEffect(() => {
-    if (!teamId) return;
-
-    const load = async () => {
-      setLoading(true);
+  // ── Fetch all events (past + future) — re-fetch on every focus ────────
+  const loadEvents = useCallback(() => {
+    if (!teamId) { setLoading(false); return; }
+    setLoading(true);
+    (async () => {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('events')
-          .select('id, event_type, opponent, location, date, kickoff_time')
+          .select('id, event_type, title, opponent, location, date, kickoff_time')
           .eq('team_id', teamId)
-          .gte('date', today)
           .order('date', { ascending: true });
-
+        if (error) console.warn('Events fetch error:', error.message);
         setEvents((data as EventItem[]) ?? []);
       } finally {
         setLoading(false);
       }
-    };
+    })();
+  }, [teamId]);
 
-    load();
-  }, [teamId, today]);
+  useFocusEffect(loadEvents);
+
+  // ── Derived data ──────────────────────────────────────────────────────
+  const todayStr = useMemo(() => toISO(new Date()), []);
+  const { start: weekStart, end: weekEnd } = useMemo(() => getWeekRange(new Date()), []);
+
+  const thisWeekEvents = useMemo(() => {
+    const ws = toISO(weekStart);
+    const we = toISO(weekEnd);
+    return events.filter((e) => e.date >= ws && e.date <= we);
+  }, [events, weekStart, weekEnd]);
+
+  const pastEvents = useMemo(
+    () => events.filter((e) => e.date < todayStr).reverse(),
+    [events, todayStr],
+  );
+
+  const counts: Record<TabKey, number> = useMemo(
+    () => ({
+      calendar: events.length,
+      week: thisWeekEvents.length,
+      past: pastEvents.length,
+    }),
+    [events.length, thisWeekEvents.length, pastEvents.length],
+  );
+
+  // Calendar-specific
+  const monthDays = useMemo(
+    () => getMonthDays(calendarMonth.year, calendarMonth.month),
+    [calendarMonth],
+  );
+
+  const eventsByDate = useMemo(() => {
+    const map: Record<string, EventItem[]> = {};
+    for (const e of events) {
+      (map[e.date] ??= []).push(e);
+    }
+    return map;
+  }, [events]);
+
+  const eventsOnSelectedDay = useMemo(
+    () => (selectedCalendarDay ? eventsByDate[selectedCalendarDay] ?? [] : []),
+    [selectedCalendarDay, eventsByDate],
+  );
+  const eventsOnSelectedWeekDay = useMemo(
+    () => (selectedWeekDay ? eventsByDate[selectedWeekDay] ?? [] : []),
+    [selectedWeekDay, eventsByDate],
+  );
+
+  // Week grid dates
+  const weekDates = useMemo(() => {
+    const dates: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      dates.push(d);
+    }
+    return dates;
+  }, [weekStart]);
+
+  const monthLabel = new Date(calendarMonth.year, calendarMonth.month).toLocaleDateString(
+    'en-US',
+    { month: 'long', year: 'numeric' },
+  );
+
+  // Default selected day to today so Day View is immediately visible under calendar
+  useEffect(() => {
+    setSelectedCalendarDay((prev) => prev ?? todayStr);
+  }, [todayStr]);
+
+  // ── Navigators ────────────────────────────────────────────────────────
+  const prevMonth = () =>
+    setCalendarMonth((prev) => {
+      const m = prev.month === 0 ? 11 : prev.month - 1;
+      const y = prev.month === 0 ? prev.year - 1 : prev.year;
+      return { year: y, month: m };
+    });
+
+  const nextMonth = () =>
+    setCalendarMonth((prev) => {
+      const m = prev.month === 11 ? 0 : prev.month + 1;
+      const y = prev.month === 11 ? prev.year + 1 : prev.year;
+      return { year: y, month: m };
+    });
+
+  // ── Render helpers ────────────────────────────────────────────────────
+
+  const renderEventCard = (event: EventItem, options?: { showBorder?: boolean }) => (
+    <View
+      key={event.id}
+      style={[
+        styles.eventCard,
+        options?.showBorder && { borderLeftWidth: 4, borderLeftColor: EVENT_COLORS[event.event_type] },
+      ]}
+    >
+      <View style={styles.eventTopRow}>
+        <Text style={styles.eventTitle}>{eventTitle(event)}</Text>
+        <View style={[styles.typePill, { backgroundColor: EVENT_COLORS[event.event_type] + '18' }]}>
+          <Text style={[styles.typePillText, { color: EVENT_COLORS[event.event_type] }]}>
+            {event.event_type}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.metaRow}>
+        <Ionicons name="calendar-outline" size={12} color="#64748B" />
+        <Text style={styles.metaText}>
+          {formatDisplayDate(event.date)}
+          {event.kickoff_time ? `, ${event.kickoff_time}` : ''}
+        </Text>
+      </View>
+      {event.location ? (
+        <View style={styles.metaRow}>
+          <Ionicons name="location-outline" size={12} color="#64748B" />
+          <Text style={styles.metaText}>{event.location}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const renderEmptyState = (message: string) => (
+    <View style={styles.emptyWrap}>
+      <Ionicons name="calendar-clear-outline" size={22} color="#94A3B8" />
+      <Text style={styles.emptyText}>{message}</Text>
+    </View>
+  );
+
+  // ── Calendar tab ──────────────────────────────────────────────────────
+  const renderCalendar = () => (
+    <View style={styles.panel}>
+      {/* Month nav */}
+      <View style={styles.monthNav}>
+        <TouchableOpacity onPress={prevMonth} activeOpacity={0.7} hitSlop={12}>
+          <Ionicons name="chevron-back" size={22} color="#0F172A" />
+        </TouchableOpacity>
+        <Text style={styles.monthLabel}>{monthLabel}</Text>
+        <TouchableOpacity onPress={nextMonth} activeOpacity={0.7} hitSlop={12}>
+          <Ionicons name="chevron-forward" size={22} color="#0F172A" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Weekday header */}
+      <View style={styles.weekdayRow}>
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+          <Text key={d} style={styles.weekdayText}>
+            {d}
+          </Text>
+        ))}
+      </View>
+
+      {/* Day grid */}
+      <View style={styles.dayGrid}>
+        {monthDays.map((cell, i) => {
+          const isToday = cell.date === todayStr;
+          const dayEvents = eventsByDate[cell.date];
+          const isSelected = cell.date === selectedCalendarDay;
+          const dotTypes = dayEvents
+            ? ([...new Set(dayEvents.map((e) => e.event_type))] as EventItem['event_type'][]).slice(0, 3)
+            : [];
+
+          return (
+            <TouchableOpacity
+              key={i}
+              style={styles.dayCell}
+              activeOpacity={0.6}
+              onPress={() => setSelectedCalendarDay(cell.date)}
+            >
+              <View style={[styles.dayNumberWrap, isToday && styles.dayToday, isSelected && !isToday && styles.daySelected]}>
+                <Text
+                  style={[
+                    styles.dayNumber,
+                    !cell.isCurrentMonth && styles.dayNumberFaded,
+                    isToday && styles.dayNumberToday,
+                  ]}
+                >
+                  {cell.dayOfMonth}
+                </Text>
+              </View>
+              {dotTypes.length > 0 && (
+                <View style={styles.dotRow}>
+                  {dotTypes.map((t) => (
+                    <View key={t} style={[styles.dot, { backgroundColor: EVENT_COLORS[t] }]} />
+                  ))}
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+    </View>
+  );
+
+  // ── Day view (separate grid below calendar) ───────────────────────────
+  const renderDayView = () => (
+    <View style={styles.panel}>
+      <Text style={styles.panelTitle}>Day View</Text>
+      <Text style={styles.selectedDayTitle}>
+        {selectedCalendarDay ? formatDisplayDate(selectedCalendarDay) : formatDisplayDate(todayStr)}
+      </Text>
+      {eventsOnSelectedDay.length === 0
+        ? renderEmptyState('No events on this day.')
+        : eventsOnSelectedDay.map((e) => renderEventCard(e))}
+    </View>
+  );
+
+  // ── This Week tab ─────────────────────────────────────────────────────
+  const renderWeek = () => {
+    const DAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return (
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>
+          {formatShortDate(weekStart)} – {formatShortDate(weekEnd)}
+        </Text>
+        <Text style={styles.weekSubtitle}>This week's schedule</Text>
+
+        {/* Weekly list (top-to-bottom) */}
+        <View style={styles.weekGrid}>
+          {weekDates.map((d, i) => {
+            const iso = toISO(d);
+            const isToday = iso === todayStr;
+            const dayEvts = eventsByDate[iso] ?? [];
+
+            return (
+              <TouchableOpacity
+                key={i}
+                style={[styles.weekRow, isToday && styles.weekRowToday]}
+                activeOpacity={0.78}
+                onPress={() => setSelectedWeekDay(iso)}
+              >
+                <View style={styles.weekRowDateWrap}>
+                  <Text style={[styles.weekColDay, isToday && styles.weekColDayToday]}>
+                    {DAY_ABBR[i]}
+                  </Text>
+                  <Text style={[styles.weekColDate, isToday && styles.weekColDateToday]}>
+                    {d.getDate()}
+                  </Text>
+                </View>
+
+                <View style={styles.weekColEvents}>
+                  {dayEvts.length === 0 ? (
+                    <Text style={styles.weekEmptyText}>No events</Text>
+                  ) : (
+                    dayEvts.map((e) => (
+                      <View
+                        key={e.id}
+                        style={[styles.weekChip, { backgroundColor: EVENT_COLORS[e.event_type] + '20' }]}
+                      >
+                        <View style={[styles.weekChipDot, { backgroundColor: EVENT_COLORS[e.event_type] }]} />
+                        <Text style={[styles.weekChipText, { color: EVENT_COLORS[e.event_type] }]} numberOfLines={1}>
+                          {eventTitle(e)}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Legend */}
+        <View style={styles.legendRow}>
+          {(['game', 'practice', 'tournament', 'meeting'] as const).map((t) => (
+            <View key={t} style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS[t] }]} />
+              <Text style={styles.legendText}>{t.charAt(0).toUpperCase() + t.slice(1)}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  // ── Past tab ──────────────────────────────────────────────────────────
+  const renderPast = () => (
+    <View style={styles.panel}>
+      <Text style={styles.panelTitle}>Past Events</Text>
+      {pastEvents.length === 0
+        ? renderEmptyState('No past events yet.')
+        : pastEvents.map((e) => renderEventCard(e, { showBorder: true }))}
+    </View>
+  );
+
+  // ── Main render ───────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <LinearGradient colors={Gradients.primary as unknown as string[]} style={styles.gradient}>
+        <View style={styles.centerState}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.stateText}>Loading...</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
 
   return (
     <LinearGradient
@@ -63,67 +451,88 @@ export default function TeamEventsScreen() {
       <View style={styles.decorCircle2} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Events</Text>
-        <Text style={styles.subtitle}>Schedule and upcoming sessions</Text>
-
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryIcon}>
-            <Ionicons name="calendar-outline" size={18} color="#fff" />
+        {/* Header row */}
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Team Calendar</Text>
+            <Text style={styles.subtitle}>Schedule and upcoming sessions</Text>
           </View>
-          <View style={styles.summaryTextWrap}>
-            <Text style={styles.summaryValue}>{events.length}</Text>
-            <Text style={styles.summaryLabel}>Upcoming Events</Text>
-          </View>
+          <TouchableOpacity style={styles.createBtn} activeOpacity={0.7} onPress={() => router.push(`/team/${teamId}/create-event`)}>
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={styles.createBtnText}>New</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>Upcoming</Text>
-          </View>
+        {/* Tab bar */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBar}
+        >
+          {TAB_KEYS.map((key) => {
+            const isActive = activeTab === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[styles.tabPill, isActive && styles.tabPillActive]}
+                activeOpacity={0.7}
+                onPress={() => setActiveTab(key)}
+              >
+                <Text style={[styles.tabPillText, isActive && styles.tabPillTextActive]}>
+                  {TAB_LABELS[key]} ({counts[key]})
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
-          {loading ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator color={Colors.primary} />
-            </View>
-          ) : events.length === 0 ? (
-            <View style={styles.emptyWrap}>
-              <Ionicons name="calendar-clear-outline" size={22} color="#94A3B8" />
-              <Text style={styles.emptyText}>No upcoming events yet.</Text>
-            </View>
-          ) : (
-            events.map((event) => (
-              <View key={event.id} style={styles.eventCard}>
-                <View style={styles.eventTopRow}>
-                  <Text style={styles.eventTitle}>
-                    {event.event_type === 'game' && event.opponent
-                      ? `Game vs ${event.opponent}`
-                      : event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)}
-                  </Text>
-                  <View style={styles.typePill}>
-                    <Text style={styles.typePillText}>{event.event_type}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.metaRow}>
-                  <Ionicons name="calendar-outline" size={12} color="#64748B" />
-                  <Text style={styles.metaText}>
-                    {formatDate(event.date)}{event.kickoff_time ? `, ${event.kickoff_time}` : ''}
-                  </Text>
-                </View>
-                {event.location ? (
-                  <View style={styles.metaRow}>
-                    <Ionicons name="location-outline" size={12} color="#64748B" />
-                    <Text style={styles.metaText}>{event.location}</Text>
-                  </View>
-                ) : null}
-              </View>
-            ))
-          )}
-        </View>
+        {/* Tab content */}
+        {activeTab === 'calendar' && (
+          <>
+            {renderCalendar()}
+            {renderDayView()}
+          </>
+        )}
+        {activeTab === 'week' && renderWeek()}
+        {activeTab === 'past' && renderPast()}
       </ScrollView>
+
+      <Modal
+        visible={!!selectedWeekDay}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedWeekDay(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setSelectedWeekDay(null)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {selectedWeekDay ? formatDisplayDate(selectedWeekDay) : 'Selected Day'}
+              </Text>
+              <TouchableOpacity onPress={() => setSelectedWeekDay(null)} hitSlop={8}>
+                <Ionicons name="close" size={20} color="#334155" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalContent}
+              contentContainerStyle={styles.modalContentInner}
+              showsVerticalScrollIndicator={false}
+            >
+              {eventsOnSelectedWeekDay.length === 0
+                ? renderEmptyState('No events scheduled for this day.')
+                : eventsOnSelectedWeekDay.map((e) => renderEventCard(e))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </LinearGradient>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
@@ -146,10 +555,28 @@ const styles = StyleSheet.create({
     left: -40,
   },
   content: {
-    paddingTop: 62,
+    paddingTop: 88,
     paddingHorizontal: 20,
-    paddingBottom: 28,
+    paddingBottom: 120,
+    gap: 14,
+  },
+  centerState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
+  },
+  stateText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // ── Header ────────────────────────────────────────────────────────────
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   title: {
     color: '#fff',
@@ -160,42 +587,54 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     fontSize: 15,
     fontWeight: '500',
+    marginTop: 2,
   },
-  summaryCard: {
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+  createBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  summaryIcon: {
-    width: 40,
-    height: 40,
+    borderColor: 'rgba(255,255,255,0.25)',
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(29,78,216,0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 4,
   },
-  summaryTextWrap: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
-  },
-  summaryValue: {
+  createBtnText: {
     color: '#fff',
-    fontSize: 32,
-    lineHeight: 34,
-    fontWeight: '800',
-  },
-  summaryLabel: {
-    color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
+
+  // ── Tab bar ───────────────────────────────────────────────────────────
+  tabBar: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+  },
+  tabPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  tabPillActive: {
+    backgroundColor: '#fff',
+    borderColor: '#fff',
+  },
+  tabPillText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  tabPillTextActive: {
+    color: Colors.primary,
+  },
+
+  // ── Panel (white card) ────────────────────────────────────────────────
   panel: {
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -204,34 +643,13 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 10,
   },
-  panelHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   panelTitle: {
     color: '#0F172A',
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
   },
-  loadingWrap: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  emptyWrap: {
-    paddingVertical: 18,
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-  },
-  emptyText: {
-    color: '#64748B',
-    fontSize: 14,
-    fontWeight: '500',
-  },
+
+  // ── Event card ────────────────────────────────────────────────────────
   eventCard: {
     borderRadius: 14,
     borderWidth: 1,
@@ -248,20 +666,16 @@ const styles = StyleSheet.create({
   },
   eventTitle: {
     color: '#0F172A',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     flex: 1,
   },
   typePill: {
-    backgroundColor: '#EEF2FF',
-    borderWidth: 1,
-    borderColor: '#C7D2FE',
     borderRadius: 999,
     paddingHorizontal: 9,
     paddingVertical: 4,
   },
   typePillText: {
-    color: '#4338CA',
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'capitalize',
@@ -275,5 +689,225 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 13,
     fontWeight: '500',
+  },
+  emptyWrap: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  emptyText: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
+  // ── Calendar ──────────────────────────────────────────────────────────
+  monthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  monthLabel: {
+    color: '#0F172A',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+  },
+  weekdayText: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dayGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: '14.285%' as any,
+    alignItems: 'center',
+    paddingVertical: 4,
+    minHeight: 44,
+  },
+  dayNumberWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayToday: {
+    backgroundColor: Colors.primary,
+  },
+  daySelected: {
+    backgroundColor: '#E0E7FF',
+  },
+  dayNumber: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  dayNumberFaded: {
+    color: '#CBD5E1',
+  },
+  dayNumberToday: {
+    color: '#fff',
+    fontWeight: '800',
+  },
+  dotRow: {
+    flexDirection: 'row',
+    gap: 3,
+    marginTop: 2,
+  },
+  dot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  selectedDayTitle: {
+    color: '#334155',
+    fontSize: 14,
+    marginTop: -6,
+    fontWeight: '700',
+  },
+
+  // ── This Week ─────────────────────────────────────────────────────────
+  weekSubtitle: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '500',
+    marginTop: -6,
+  },
+  weekGrid: {
+    gap: 8,
+  },
+  weekRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 10,
+  },
+  weekRowToday: {
+    borderColor: Colors.primary,
+    borderWidth: 2,
+    backgroundColor: '#EFF6FF',
+  },
+  weekRowDateWrap: {
+    width: 48,
+    alignItems: 'center',
+    gap: 2,
+  },
+  weekColDay: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  weekColDayToday: {
+    color: Colors.primary,
+  },
+  weekColDate: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  weekColDateToday: {
+    color: Colors.primary,
+  },
+  weekColEvents: {
+    flex: 1,
+    gap: 4,
+    marginTop: 1,
+  },
+  weekEmptyText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  weekChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  weekChipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  weekChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    flex: 1,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '70%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  modalTitle: {
+    color: '#0F172A',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  modalContent: {
+    flexGrow: 0,
+  },
+  modalContentInner: {
+    gap: 8,
   },
 });
