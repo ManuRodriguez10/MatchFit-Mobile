@@ -81,7 +81,7 @@ export default function TeamDashboardScreen() {
             .eq('team_id', teamId)
             .gte('date', today)
             .order('date', { ascending: true })
-            .limit(2),
+            .limit(3),
         ]);
 
         if (teamRes.error) throw teamRes.error;
