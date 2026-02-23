@@ -15,6 +15,7 @@ import Animated, {
 } from '@/utils/reanimated-shim';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
+import { UI } from '@/constants/ui';
 
 interface InputProps extends TextInputProps {
   label: string;
@@ -85,7 +86,7 @@ export default function Input({
     ? Colors.error
     : isFocused
     ? Colors.primary
-    : Colors.border;
+    : Colors.borderSoft;
 
   return (
     <Animated.View style={[styles.container, containerStyle, animatedContainerStyle]}>
@@ -97,8 +98,8 @@ export default function Input({
             borderWidth: isFocused ? 2 : 1,
             shadowColor: isFocused ? Colors.primary : 'transparent',
             shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
+            shadowOpacity: isFocused ? 0.12 : 0,
+            shadowRadius: 12,
             elevation: isFocused ? 2 : 0,
           },
         ]}
@@ -151,13 +152,13 @@ export default function Input({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.background,
-    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: UI.radius.lg,
     paddingHorizontal: 16,
     height: 56,
   },
@@ -174,10 +175,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   input: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.textPrimary,
-    paddingTop: 8,
+    paddingTop: 2,
     height: 40,
+    fontFamily: UI.typography.medium,
   },
   eyeIcon: {
     padding: 8,
@@ -190,7 +192,8 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: Colors.error,
-    fontSize: 13,
+    fontSize: 12,
     marginLeft: 4,
+    fontFamily: UI.typography.medium,
   },
 });

@@ -9,6 +9,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Switch,
+  useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,19 +25,17 @@ import Button from '@/components/ui/Button';
 // Types & constants
 // ---------------------------------------------------------------------------
 
-type EventType = 'game' | 'practice' | 'tournament' | 'meeting';
+type EventType = 'game' | 'practice' | 'meeting';
 
 const EVENT_TYPE_OPTIONS: { key: EventType; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'game', label: 'Game', icon: 'football-outline' },
   { key: 'practice', label: 'Practice', icon: 'fitness-outline' },
-  { key: 'tournament', label: 'Tournament', icon: 'trophy-outline' },
   { key: 'meeting', label: 'Meeting', icon: 'people-outline' },
 ];
 
 const EVENT_TYPE_COLORS: Record<EventType, string> = {
   game: '#EF4444',
   practice: '#3B82F6',
-  tournament: '#F59E0B',
   meeting: '#8B5CF6',
 };
 
@@ -148,6 +147,7 @@ interface FormErrors {
 export default function CreateEventScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const { user } = useAuth();
+  const { height } = useWindowDimensions();
 
   // Form state
   const [eventType, setEventType] = useState<EventType | null>(null);
@@ -335,6 +335,15 @@ export default function CreateEventScreen() {
     return 'Create Event';
   }, [repeatEnabled, recurringCount]);
 
+  const formCardHeight = useMemo(() => {
+    // Fixed in-frame form panel height so it never collides with the floating team tab bar.
+    // Leaves a visible gap above the navbar and scrolls inside the card instead.
+    const reservedBottom = Platform.OS === 'ios' ? 245 : 210; // navbar + gap
+    const reservedTop = Platform.OS === 'ios' ? 175 : 150; // header block + top spacing
+    const available = height - reservedTop - reservedBottom;
+    return Math.max(500, Math.min(620, available));
+  }, [height]);
+
   // ── Render ─────────────────────────────────────────────────────────────
   return (
     <LinearGradient
@@ -371,7 +380,14 @@ export default function CreateEventScreen() {
           </View>
 
           {/* ── White card ───────────────────────────────────────── */}
-          <View style={styles.card}>
+          <View style={[styles.card, { height: formCardHeight }]}>
+            <ScrollView
+              style={styles.cardScroll}
+              contentContainerStyle={styles.cardContent}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
             {/* General error banner */}
             {generalError ? (
               <View style={styles.errorBanner}>
@@ -511,13 +527,17 @@ export default function CreateEventScreen() {
 
             {/* ── Repeat Section ──────────────────────────────────── */}
             <View style={styles.repeatHeader}>
-              <Text style={styles.sectionLabel}>Repeat this event</Text>
-              <Switch
-                value={repeatEnabled}
-                onValueChange={setRepeatEnabled}
-                trackColor={{ false: '#E2E8F0', true: Colors.primary + '60' }}
-                thumbColor={repeatEnabled ? Colors.primary : '#fff'}
-              />
+              <Text style={styles.repeatHeaderLabel} numberOfLines={1}>
+                Repeat this event
+              </Text>
+              <View style={styles.repeatSwitchWrap}>
+                <Switch
+                  value={repeatEnabled}
+                  onValueChange={setRepeatEnabled}
+                  trackColor={{ false: '#E2E8F0', true: Colors.primary + '60' }}
+                  thumbColor={repeatEnabled ? Colors.primary : '#fff'}
+                />
+              </View>
             </View>
 
             {repeatEnabled && (
@@ -604,12 +624,15 @@ export default function CreateEventScreen() {
             )}
 
             {/* ── Submit Button ───────────────────────────────────── */}
-            <Button
-              title={buttonTitle}
-              onPress={handleSubmit}
-              loading={loading}
-              disabled={loading}
-            />
+            <View style={styles.submitButtonWrap}>
+              <Button
+                title={buttonTitle}
+                onPress={handleSubmit}
+                loading={loading}
+                disabled={loading}
+              />
+            </View>
+            </ScrollView>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -644,7 +667,7 @@ const styles = StyleSheet.create({
   content: {
     paddingTop: 72,
     paddingHorizontal: 20,
-    paddingBottom: 60,
+    paddingBottom: 190,
     gap: 16,
   },
 
@@ -679,8 +702,20 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
     borderRadius: 20,
+    padding: 0,
+    gap: 0,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  cardScroll: {
+    width: '100%',
+    flex: 1,
+  },
+  cardContent: {
+    width: '100%',
     padding: 20,
-    gap: 4,
+    gap: 10,
+    paddingBottom: 44,
   },
 
   // Error banner
@@ -758,7 +793,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: '#E2E8F0',
-    marginVertical: 12,
+    marginVertical: 16,
   },
 
   // Char counter
@@ -792,7 +827,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 10,
+    width: '100%',
+  },
+  repeatHeaderLabel: {
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '800',
+    flex: 1,
+    paddingRight: 12,
+    minWidth: 0,
+  },
+  repeatSwitchWrap: {
+    width: 56,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   repeatBody: {
     gap: 10,
@@ -851,5 +902,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     marginTop: 4,
+  },
+  submitButtonWrap: {
+    marginTop: 28,
   },
 });

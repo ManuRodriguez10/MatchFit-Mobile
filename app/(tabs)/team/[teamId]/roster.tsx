@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Gradients } from '@/constants/colors';
+import { UI } from '@/constants/ui';
 import { CoachRole, PlayerPosition, TeamCoachWithProfile, TeamPlayerWithProfile } from '@/types/database';
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -375,13 +376,13 @@ const styles = StyleSheet.create({
 
   // Loading / error
   centerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 },
-  loadingText: { color: 'rgba(255,255,255,0.8)', fontSize: 15 },
-  errorText: { color: 'rgba(255,255,255,0.85)', fontSize: 15, textAlign: 'center' },
+  loadingText: { color: 'rgba(255,255,255,0.8)', fontSize: 15, fontFamily: UI.typography.medium },
+  errorText: { color: 'rgba(255,255,255,0.85)', fontSize: 15, textAlign: 'center', fontFamily: UI.typography.medium },
   retryButton: {
     backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12,
     paddingVertical: 10, paddingHorizontal: 24,
   },
-  retryText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  retryText: { color: '#fff', fontWeight: '700', fontSize: 15, fontFamily: UI.typography.bold },
 
   // Header
   header: {
@@ -398,7 +399,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   headerTitle: {
-    flex: 1, fontSize: 20, fontWeight: '800', color: '#fff', textAlign: 'center',
+    flex: 1, fontSize: 20, fontWeight: '800', color: '#fff', textAlign: 'center', fontFamily: UI.typography.bold,
   },
 
   // Scroll
@@ -411,26 +412,26 @@ const styles = StyleSheet.create({
   },
   statRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   statPill: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statText: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
+  statText: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, fontFamily: UI.typography.medium },
   statDivider: { width: 1, height: 18, backgroundColor: Colors.border },
   inviteCodeRow: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: 'rgba(59,130,246,0.07)', borderRadius: 10,
     paddingVertical: 8, paddingHorizontal: 12,
   },
-  inviteCodeLabel: { fontSize: 13, color: Colors.textSecondary },
-  inviteCode: { flex: 1, fontSize: 14, fontWeight: '700', color: Colors.primary, letterSpacing: 2 },
+  inviteCodeLabel: { fontSize: 13, color: Colors.textSecondary, fontFamily: UI.typography.medium },
+  inviteCode: { flex: 1, fontSize: 14, fontWeight: '700', color: Colors.primary, letterSpacing: 2, fontFamily: UI.typography.bold },
 
   // Section header
   sectionHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#fff', fontFamily: UI.typography.bold },
   countBadge: {
     backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 10,
     paddingHorizontal: 8, paddingVertical: 2,
   },
-  countBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  countBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: UI.typography.bold },
 
   // Member row
   memberRow: {
@@ -442,23 +443,23 @@ const styles = StyleSheet.create({
     width: 46, height: 46, borderRadius: 23,
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  avatarText: { color: '#fff', fontWeight: '800', fontSize: 16, fontFamily: UI.typography.bold },
   memberInfo: { flex: 1, gap: 5 },
-  memberName: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  memberName: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, fontFamily: UI.typography.bold },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
   coachBadge: {
     backgroundColor: 'rgba(59,130,246,0.12)', borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 3,
   },
-  coachBadgeText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  coachBadgeText: { fontSize: 12, fontWeight: '700', color: Colors.primary, fontFamily: UI.typography.bold },
   jerseyBadge: {
     backgroundColor: 'rgba(30,58,138,0.1)', borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 3,
   },
-  jerseyText: { fontSize: 12, fontWeight: '700', color: Colors.primaryDark },
+  jerseyText: { fontSize: 12, fontWeight: '700', color: Colors.primaryDark, fontFamily: UI.typography.bold },
   positionTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  positionText: { fontSize: 11, fontWeight: '700' },
-  noDetailText: { fontSize: 12, color: Colors.textSecondary, fontStyle: 'italic' },
+  positionText: { fontSize: 11, fontWeight: '700', fontFamily: UI.typography.bold },
+  noDetailText: { fontSize: 12, color: Colors.textSecondary, fontStyle: 'italic', fontFamily: UI.typography.medium },
 
   // Empty state
   emptyState: {
@@ -466,17 +467,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 20,
     marginBottom: 12,
   },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#fff', fontFamily: UI.typography.bold },
   emptySubtitle: {
     fontSize: 13, color: 'rgba(255,255,255,0.7)',
     textAlign: 'center', paddingHorizontal: 24,
+    fontFamily: UI.typography.medium,
   },
   shareButton: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12,
     paddingVertical: 10, paddingHorizontal: 20, marginTop: 4,
   },
-  shareButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  shareButtonText: { color: '#fff', fontWeight: '700', fontSize: 14, fontFamily: UI.typography.bold },
 
   bottomPad: { height: 20 },
 });

@@ -16,6 +16,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Colors, Gradients } from '@/constants/colors';
+import { UI } from '@/constants/ui';
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -58,7 +59,7 @@ export default function Button({
   const renderContent = () => (
     <>
       {loading ? (
-        <ActivityIndicator color={Colors.background} size="small" />
+        <ActivityIndicator color={variant === 'primary' ? Colors.textOnDark : Colors.textPrimary} size="small" />
       ) : (
         <Text style={[styles.text, textStyle]}>{title}</Text>
       )}
@@ -76,7 +77,7 @@ export default function Button({
         activeOpacity={0.8}
       >
         <LinearGradient
-          colors={isDisabled ? ['#9CA3AF', '#6B7280'] : (Gradients.primaryLight as unknown as string[])}
+          colors={isDisabled ? ['#9CA3AF', '#6B7280'] : (Gradients.darkButton as unknown as string[])}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={[
@@ -100,6 +101,7 @@ export default function Button({
       style={[
         animatedStyle,
         styles.container,
+        variant === 'secondary' && styles.secondaryContainer,
         variant === 'outline' && styles.outlineContainer,
         style,
       ]}
@@ -112,35 +114,43 @@ export default function Button({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 24,
+    borderRadius: UI.radius.xl,
     overflow: 'hidden',
-    backgroundColor: 'transparent',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: Colors.surface,
+    ...UI.shadow.soft,
   },
   gradientButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
+    paddingVertical: 14,
+    paddingHorizontal: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 56,
+    minHeight: 52,
   },
   text: {
-    color: Colors.background,
-    fontSize: 16,
+    color: Colors.textOnDark,
+    fontSize: 15,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    fontFamily: UI.typography.bold,
+    letterSpacing: 0.1,
+  },
+  secondaryContainer: {
+    backgroundColor: Colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: Colors.borderSoft,
+    minHeight: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 22,
+    paddingVertical: 14,
   },
   outlineContainer: {
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    backgroundColor: 'transparent',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingVertical: 14,
+    paddingHorizontal: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 52,
   },
 });

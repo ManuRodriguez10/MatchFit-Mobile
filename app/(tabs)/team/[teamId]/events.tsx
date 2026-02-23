@@ -14,6 +14,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { Colors, Gradients } from '@/constants/colors';
+import { UI } from '@/constants/ui';
+import Card from '@/components/ui/Card';
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -232,8 +234,9 @@ export default function TeamEventsScreen() {
   // ── Render helpers ────────────────────────────────────────────────────
 
   const renderEventCard = (event: EventItem, options?: { showBorder?: boolean }) => (
-    <View
+    <Card
       key={event.id}
+      muted
       style={[
         styles.eventCard,
         options?.showBorder && { borderLeftWidth: 4, borderLeftColor: EVENT_COLORS[event.event_type] },
@@ -260,19 +263,19 @@ export default function TeamEventsScreen() {
           <Text style={styles.metaText}>{event.location}</Text>
         </View>
       ) : null}
-    </View>
+    </Card>
   );
 
   const renderEmptyState = (message: string) => (
-    <View style={styles.emptyWrap}>
+    <Card muted style={styles.emptyWrap}>
       <Ionicons name="calendar-clear-outline" size={22} color="#94A3B8" />
       <Text style={styles.emptyText}>{message}</Text>
-    </View>
+    </Card>
   );
 
   // ── Calendar tab ──────────────────────────────────────────────────────
   const renderCalendar = () => (
-    <View style={styles.panel}>
+    <Card padded={false} style={styles.panel}>
       {/* Month nav */}
       <View style={styles.monthNav}>
         <TouchableOpacity onPress={prevMonth} activeOpacity={0.7} hitSlop={12}>
@@ -333,12 +336,12 @@ export default function TeamEventsScreen() {
         })}
       </View>
 
-    </View>
+    </Card>
   );
 
   // ── Day view (separate grid below calendar) ───────────────────────────
   const renderDayView = () => (
-    <View style={styles.panel}>
+    <Card padded={false} style={styles.panel}>
       <Text style={styles.panelTitle}>Day View</Text>
       <Text style={styles.selectedDayTitle}>
         {selectedCalendarDay ? formatDisplayDate(selectedCalendarDay) : formatDisplayDate(todayStr)}
@@ -346,21 +349,26 @@ export default function TeamEventsScreen() {
       {eventsOnSelectedDay.length === 0
         ? renderEmptyState('No events on this day.')
         : eventsOnSelectedDay.map((e) => renderEventCard(e))}
-    </View>
+    </Card>
   );
 
   // ── This Week tab ─────────────────────────────────────────────────────
   const renderWeek = () => {
     const DAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return (
-      <View style={styles.panel}>
+      <Card padded={false} style={styles.panel}>
         <Text style={styles.panelTitle}>
           {formatShortDate(weekStart)} – {formatShortDate(weekEnd)}
         </Text>
         <Text style={styles.weekSubtitle}>This week's schedule</Text>
 
         {/* Weekly list (top-to-bottom) */}
-        <View style={styles.weekGrid}>
+        <ScrollView
+          style={styles.weekListScroller}
+          contentContainerStyle={styles.weekGrid}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
+        >
           {weekDates.map((d, i) => {
             const iso = toISO(d);
             const isToday = iso === todayStr;
@@ -402,7 +410,7 @@ export default function TeamEventsScreen() {
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
 
         {/* Legend */}
         <View style={styles.legendRow}>
@@ -413,18 +421,18 @@ export default function TeamEventsScreen() {
             </View>
           ))}
         </View>
-      </View>
+      </Card>
     );
   };
 
   // ── Past tab ──────────────────────────────────────────────────────────
   const renderPast = () => (
-    <View style={styles.panel}>
+    <Card padded={false} style={styles.panel}>
       <Text style={styles.panelTitle}>Past Events</Text>
       {pastEvents.length === 0
         ? renderEmptyState('No past events yet.')
         : pastEvents.map((e) => renderEventCard(e, { showBorder: true }))}
-    </View>
+    </Card>
   );
 
   // ── Main render ───────────────────────────────────────────────────────
@@ -504,25 +512,27 @@ export default function TeamEventsScreen() {
         onRequestClose={() => setSelectedWeekDay(null)}
       >
         <Pressable style={styles.modalBackdrop} onPress={() => setSelectedWeekDay(null)}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
-            <View style={styles.modalHeader}>
+          <Pressable onPress={() => {}}>
+            <Card padded={false} style={styles.modalCard}>
+              <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {selectedWeekDay ? formatDisplayDate(selectedWeekDay) : 'Selected Day'}
               </Text>
               <TouchableOpacity onPress={() => setSelectedWeekDay(null)} hitSlop={8}>
                 <Ionicons name="close" size={20} color="#334155" />
               </TouchableOpacity>
-            </View>
+              </View>
 
-            <ScrollView
-              style={styles.modalContent}
-              contentContainerStyle={styles.modalContentInner}
-              showsVerticalScrollIndicator={false}
-            >
-              {eventsOnSelectedWeekDay.length === 0
-                ? renderEmptyState('No events scheduled for this day.')
-                : eventsOnSelectedWeekDay.map((e) => renderEventCard(e))}
-            </ScrollView>
+              <ScrollView
+                style={styles.modalContent}
+                contentContainerStyle={styles.modalContentInner}
+                showsVerticalScrollIndicator={false}
+              >
+                {eventsOnSelectedWeekDay.length === 0
+                  ? renderEmptyState('No events scheduled for this day.')
+                  : eventsOnSelectedWeekDay.map((e) => renderEventCard(e))}
+              </ScrollView>
+            </Card>
           </Pressable>
         </Pressable>
       </Modal>
@@ -557,8 +567,8 @@ const styles = StyleSheet.create({
   content: {
     paddingTop: 88,
     paddingHorizontal: 20,
-    paddingBottom: 120,
-    gap: 14,
+    paddingBottom: 220,
+    gap: 16,
   },
   centerState: {
     flex: 1,
@@ -570,6 +580,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: UI.typography.medium,
   },
 
   // ── Header ────────────────────────────────────────────────────────────
@@ -580,43 +591,47 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#fff',
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
+    letterSpacing: -0.4,
   },
   subtitle: {
     color: 'rgba(255,255,255,0.9)',
     fontSize: 15,
     fontWeight: '500',
+    fontFamily: UI.typography.medium,
     marginTop: 2,
   },
   createBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     marginTop: 4,
   },
   createBtnText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
   },
 
   // ── Tab bar ───────────────────────────────────────────────────────────
   tabBar: {
     flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 2,
+    gap: 10,
+    paddingVertical: 4,
   },
   tabPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: UI.radius.pill,
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
@@ -627,8 +642,9 @@ const styles = StyleSheet.create({
   },
   tabPillText: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
   },
   tabPillTextActive: {
     color: Colors.primary,
@@ -636,27 +652,25 @@ const styles = StyleSheet.create({
 
   // ── Panel (white card) ────────────────────────────────────────────────
   panel: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: 24,
     padding: 14,
     gap: 10,
   },
   panelTitle: {
-    color: '#0F172A',
-    fontSize: 22,
+    color: Colors.textPrimary,
+    fontSize: 20,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
   },
 
   // ── Event card ────────────────────────────────────────────────────────
   eventCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: UI.radius.lg,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 11,
     gap: 6,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   eventTopRow: {
     flexDirection: 'row',
@@ -665,19 +679,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   eventTitle: {
-    color: '#0F172A',
+    color: Colors.textPrimary,
     fontSize: 17,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
     flex: 1,
   },
   typePill: {
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    borderRadius: UI.radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   typePillText: {
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
     textTransform: 'capitalize',
   },
   metaRow: {
@@ -686,23 +702,24 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   metaText: {
-    color: '#64748B',
+    color: Colors.textSecondary,
     fontSize: 13,
     fontWeight: '500',
+    fontFamily: UI.typography.medium,
   },
   emptyWrap: {
-    paddingVertical: 18,
+    paddingVertical: 20,
     alignItems: 'center',
     gap: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   emptyText: {
-    color: '#64748B',
+    color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: UI.typography.medium,
   },
 
   // ── Calendar ──────────────────────────────────────────────────────────
@@ -710,15 +727,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
   },
   monthLabel: {
-    color: '#0F172A',
-    fontSize: 20,
+    color: Colors.textPrimary,
+    fontSize: 19,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
   },
   weekdayRow: {
     flexDirection: 'row',
+    marginTop: 2,
   },
   weekdayText: {
     flex: 1,
@@ -726,6 +745,7 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
   },
   dayGrid: {
     flexDirection: 'row',
@@ -734,13 +754,13 @@ const styles = StyleSheet.create({
   dayCell: {
     width: '14.285%' as any,
     alignItems: 'center',
-    paddingVertical: 4,
-    minHeight: 44,
+    paddingVertical: 5,
+    minHeight: 48,
   },
   dayNumberWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -748,12 +768,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   daySelected: {
-    backgroundColor: '#E0E7FF',
+    backgroundColor: Colors.primarySoft,
   },
   dayNumber: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#0F172A',
+    color: Colors.textPrimary,
+    fontFamily: UI.typography.medium,
   },
   dayNumberFaded: {
     color: '#CBD5E1',
@@ -761,6 +782,7 @@ const styles = StyleSheet.create({
   dayNumberToday: {
     color: '#fff',
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
   },
   dotRow: {
     flexDirection: 'row',
@@ -773,31 +795,37 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   selectedDayTitle: {
-    color: '#334155',
+    color: Colors.textPrimary,
     fontSize: 14,
-    marginTop: -6,
+    marginTop: -4,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
   },
 
   // ── This Week ─────────────────────────────────────────────────────────
   weekSubtitle: {
-    color: '#64748B',
-    fontSize: 14,
+    color: Colors.textSecondary,
+    fontSize: 13,
     fontWeight: '500',
-    marginTop: -6,
+    fontFamily: UI.typography.medium,
+    marginTop: -2,
   },
   weekGrid: {
     gap: 8,
   },
+  weekListScroller: {
+    maxHeight: 500,
+  },
   weekRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.borderSoft,
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 10,
+    minHeight: 72,
   },
   weekRowToday: {
     borderColor: Colors.primary,
@@ -805,22 +833,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#EFF6FF',
   },
   weekRowDateWrap: {
-    width: 48,
+    width: 46,
     alignItems: 'center',
-    gap: 2,
+    gap: 0,
   },
   weekColDay: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#94A3B8',
+    fontFamily: UI.typography.bold,
   },
   weekColDayToday: {
     color: Colors.primary,
   },
   weekColDate: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: Colors.textPrimary,
+    fontFamily: UI.typography.bold,
   },
   weekColDateToday: {
     color: Colors.primary,
@@ -828,20 +858,21 @@ const styles = StyleSheet.create({
   weekColEvents: {
     flex: 1,
     gap: 4,
-    marginTop: 1,
+    marginTop: 0,
   },
   weekEmptyText: {
     color: '#94A3B8',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
+    fontFamily: UI.typography.medium,
   },
   weekChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    gap: 3,
+    borderRadius: UI.radius.sm,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
   },
   weekChipDot: {
     width: 6,
@@ -849,17 +880,18 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   weekChipText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
     flex: 1,
   },
   legendRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    paddingTop: 6,
+    gap: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: Colors.borderSoft,
   },
   legendItem: {
     flexDirection: 'row',
@@ -872,13 +904,14 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   legendText: {
-    color: '#64748B',
-    fontSize: 12,
+    color: Colors.textSecondary,
+    fontSize: 11,
     fontWeight: '600',
+    fontFamily: UI.typography.medium,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.55)',
+    backgroundColor: Colors.backdrop,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -887,27 +920,25 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 520,
     maxHeight: '70%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
+    borderRadius: 24,
+    padding: 16,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   modalTitle: {
-    color: '#0F172A',
+    color: Colors.textPrimary,
     fontSize: 18,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
   },
   modalContent: {
     flexGrow: 0,
   },
   modalContentInner: {
-    gap: 8,
+    gap: 10,
   },
 });

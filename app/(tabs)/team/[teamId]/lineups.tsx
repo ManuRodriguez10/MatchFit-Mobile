@@ -1,7 +1,10 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Gradients } from '@/constants/colors';
+import { Colors, Gradients } from '@/constants/colors';
+import { UI } from '@/constants/ui';
+import Card from '@/components/ui/Card';
+import Chip from '@/components/ui/Chip';
 
 export default function TeamLineupsScreen() {
   return (
@@ -31,32 +34,30 @@ export default function TeamLineupsScreen() {
           </LinearGradient>
         </View>
 
-        <View style={styles.panel}>
+        <Card padded={false} style={styles.panel}>
           <View style={styles.panelHeader}>
             <Text style={styles.panelTitle}>Recent Lineups</Text>
           </View>
 
-          <View style={styles.lineupCardMuted}>
+          <Card muted style={styles.lineupCardMuted}>
             <Text style={styles.lineupTitleMuted}>No published lineups yet</Text>
             <Text style={styles.lineupMetaMuted}>Create your first lineup to prepare for upcoming matches.</Text>
-          </View>
+          </Card>
 
-          <View style={styles.lineupCard}>
+          <Card style={styles.lineupCard}>
             <View style={styles.lineupTop}>
               <Text style={styles.lineupTitle}>Game Lineup Template</Text>
-              <View style={styles.draftPill}>
-                <Text style={styles.draftPillText}>Draft</Text>
-              </View>
+              <Chip label="Draft" tone="lavender" />
             </View>
             <Text style={styles.lineupMeta}>Formation: 4-3-3</Text>
             <Text style={styles.lineupMeta}>11 starters • 7 subs</Text>
-          </View>
+          </Card>
 
           <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85}>
             <Ionicons name="add-circle-outline" size={16} color="#fff" />
             <Text style={styles.primaryButtonText}>Create New Lineup</Text>
           </TouchableOpacity>
-        </View>
+        </Card>
       </ScrollView>
     </LinearGradient>
   );
@@ -83,53 +84,56 @@ const styles = StyleSheet.create({
     left: -40,
   },
   content: {
-    paddingTop: 62,
+    paddingTop: 120,
     paddingHorizontal: 20,
-    paddingBottom: 28,
-    gap: 12,
+    paddingBottom: 120,
+    gap: UI.spacing.sm,
   },
   title: {
     color: '#fff',
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
+    letterSpacing: -0.4,
   },
   subtitle: {
     color: 'rgba(255,255,255,0.9)',
     fontSize: 15,
     fontWeight: '500',
+    fontFamily: UI.typography.medium,
   },
   summaryRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
   summaryCard: {
     flex: 1,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderRadius: UI.radius.lg,
+    paddingHorizontal: UI.spacing.sm,
+    paddingVertical: UI.spacing.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+    minHeight: 112,
   },
   summaryValue: {
     color: '#fff',
     fontSize: 28,
     lineHeight: 30,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
     marginTop: 8,
   },
   summaryLabel: {
     color: '#fff',
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
     marginTop: 2,
   },
   panel: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 10,
+    borderRadius: 24,
+    padding: UI.spacing.md,
+    gap: 12,
   },
   panelHeader: {
     flexDirection: 'row',
@@ -137,36 +141,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   panelTitle: {
-    color: '#0F172A',
+    color: Colors.textPrimary,
     fontSize: 24,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
   },
   lineupCardMuted: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 4,
+    borderRadius: 16,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   lineupTitleMuted: {
-    color: '#334155',
+    color: Colors.textPrimary,
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
   },
   lineupMetaMuted: {
-    color: '#64748B',
+    color: Colors.textSecondary,
     fontSize: 13,
     fontWeight: '500',
+    fontFamily: UI.typography.medium,
   },
   lineupCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 4,
+    borderRadius: 16,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   lineupTop: {
     flexDirection: 'row',
@@ -175,34 +181,23 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   lineupTitle: {
-    color: '#0F172A',
+    color: Colors.textPrimary,
     fontSize: 17,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
     flex: 1,
   },
   lineupMeta: {
-    color: '#64748B',
+    color: Colors.textSecondary,
     fontSize: 13,
     fontWeight: '500',
-  },
-  draftPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-    backgroundColor: '#F5F3FF',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  draftPillText: {
-    color: '#6D28D9',
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: UI.typography.medium,
   },
   primaryButton: {
-    borderRadius: 12,
-    backgroundColor: '#2563EB',
+    borderRadius: UI.radius.lg,
+    backgroundColor: Colors.primary,
     paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -210,7 +205,8 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
   },
 });

@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Gradients } from '@/constants/colors';
+import { UI } from '@/constants/ui';
+import Card from '@/components/ui/Card';
 
 interface TeamSummary {
   id: string;
@@ -188,7 +190,7 @@ export default function TeamDashboardScreen() {
         </View>
 
         <View style={styles.panelRow}>
-          <View style={styles.panelLarge}>
+          <Card padded={false} style={styles.panelLarge}>
             <View style={styles.panelHeader}>
               <View style={styles.panelHeaderLeft}>
                 <View style={[styles.panelIconWrap, styles.panelIconBlue]}>
@@ -205,12 +207,12 @@ export default function TeamDashboardScreen() {
             </View>
 
             {upcomingEvents.length === 0 ? (
-              <View style={styles.emptyPanelState}>
+              <Card muted style={styles.emptyPanelState}>
                 <Text style={styles.emptyPanelText}>No upcoming events yet.</Text>
-              </View>
+              </Card>
             ) : (
               upcomingEvents.map((event) => (
-                <View key={event.id} style={styles.eventCard}>
+                <Card key={event.id} muted style={styles.eventCard}>
                   <Text style={styles.eventTitle}>
                     {event.event_type === 'game' && event.opponent
                       ? `Game vs ${event.opponent}`
@@ -229,12 +231,12 @@ export default function TeamDashboardScreen() {
                       <Text style={styles.metaText}>{event.location}</Text>
                     </View>
                   ) : null}
-                </View>
+                </Card>
               ))
             )}
-          </View>
+          </Card>
 
-          <View style={styles.panelSmall}>
+          <Card padded={false} style={styles.panelSmall}>
             <View style={styles.panelHeaderLeft}>
               <View style={[styles.panelIconWrap, styles.panelIconGreen]}>
                 <Ionicons name="clipboard-outline" size={16} color="#fff" />
@@ -245,9 +247,9 @@ export default function TeamDashboardScreen() {
               </View>
             </View>
 
-            <View style={styles.emptyPanelState}>
+            <Card muted style={styles.emptyPanelState}>
               <Text style={styles.emptyPanelText}>No published lineups yet.</Text>
-            </View>
+            </Card>
 
             <TouchableOpacity
               style={styles.manageButton}
@@ -257,7 +259,7 @@ export default function TeamDashboardScreen() {
               <Text style={styles.manageButtonText}>Manage Lineups</Text>
               <Ionicons name="arrow-forward" size={14} color="#334155" />
             </TouchableOpacity>
-          </View>
+          </Card>
         </View>
       </ScrollView>
     </LinearGradient>
@@ -287,86 +289,95 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: 62,
     paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingBottom: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   headerButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.22)',
   },
   headerButtonGhost: {
-    width: 38,
-    height: 38,
+    width: 42,
+    height: 42,
   },
   headerTitle: {
     color: '#fff',
     fontSize: 20,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
     flex: 1,
     textAlign: 'center',
     paddingHorizontal: 10,
   },
   content: {
     paddingHorizontal: 20,
-    paddingTop: 26,
-    paddingBottom: 28,
-    gap: 14,
+    paddingTop: 30,
+    paddingBottom: 30,
+    gap: 16,
   },
   heroRow: {
     marginTop: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    gap: 12,
+    marginBottom: 16,
   },
   helloText: {
     color: 'rgba(255,255,255,0.92)',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
+    fontFamily: UI.typography.medium,
   },
   nameText: {
     color: '#fff',
-    fontSize: 36,
-    lineHeight: 38,
+    fontSize: 34,
+    lineHeight: 35,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
   },
   dateChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderRadius: UI.radius.lg,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   dateChipText: {
-    color: '#334155',
-    fontSize: 12,
+    color: Colors.textPrimary,
+    fontSize: 13,
     fontWeight: '600',
+    fontFamily: UI.typography.medium,
   },
   metricStrip: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   metricCard: {
     flex: 1,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    borderRadius: UI.radius.lg,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
+    minHeight: 138,
   },
   metricIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.35)',
     backgroundColor: 'rgba(255,255,255,0.16)',
@@ -375,41 +386,38 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     color: '#fff',
-    fontSize: 30,
-    lineHeight: 32,
+    fontSize: 28,
+    lineHeight: 29,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
     marginTop: 6,
   },
   metricTitle: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
     marginTop: 2,
   },
   metricSubtitle: {
     color: 'rgba(255,255,255,0.86)',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
+    fontFamily: UI.typography.medium,
     marginTop: 1,
   },
   panelRow: {
-    gap: 12,
+    gap: 14,
   },
   panelLarge: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 10,
+    padding: UI.spacing.md,
+    gap: 12,
+    borderRadius: 24,
   },
   panelSmall: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
+    padding: UI.spacing.md,
     gap: 12,
+    borderRadius: 24,
   },
   panelHeader: {
     flexDirection: 'row',
@@ -418,13 +426,15 @@ const styles = StyleSheet.create({
   },
   panelHeaderLeft: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    alignItems: 'flex-start',
+    gap: 12,
+    flex: 1,
+    paddingRight: 8,
   },
   panelIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -435,32 +445,36 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
   },
   panelTitle: {
-    color: '#0F172A',
-    fontSize: 24,
+    color: Colors.textPrimary,
+    fontSize: 22,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
   },
   panelSubtitle: {
-    color: '#64748B',
-    fontSize: 14,
+    color: Colors.textSecondary,
+    fontSize: 13,
     fontWeight: '500',
+    fontFamily: UI.typography.medium,
   },
   viewAllText: {
     color: Colors.primary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
   },
   eventCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: UI.radius.lg,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 5,
+    paddingVertical: 11,
+    gap: 6,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   eventTitle: {
-    color: '#0F172A',
-    fontSize: 17,
+    color: Colors.textPrimary,
+    fontSize: 16,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
   },
   metaRow: {
     flexDirection: 'row',
@@ -468,40 +482,42 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   metaText: {
-    color: '#64748B',
+    color: Colors.textSecondary,
     fontSize: 13,
     fontWeight: '500',
+    fontFamily: UI.typography.medium,
   },
   manageButton: {
-    borderRadius: 12,
+    borderRadius: UI.radius.lg,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceMuted,
     paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   manageButtonText: {
-    color: '#334155',
-    fontSize: 14,
+    color: Colors.textPrimary,
+    fontSize: 15,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
   },
   emptyPanelState: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingVertical: 16,
+    paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   emptyPanelText: {
-    color: '#64748B',
+    color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: UI.typography.medium,
   },
   centerState: {
     flex: 1,
@@ -514,6 +530,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: UI.typography.medium,
     textAlign: 'center',
   },
   backButton: {
@@ -527,5 +544,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: UI.typography.bold,
   },
 });

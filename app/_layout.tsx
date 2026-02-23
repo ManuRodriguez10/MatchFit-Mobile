@@ -1,5 +1,12 @@
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
+import { useFonts } from 'expo-font';
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+} from '@expo-google-fonts/plus-jakarta-sans';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import LoadingScreen from '@/components/LoadingScreen';
 import '../global.css';
@@ -52,6 +59,17 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+  });
+
+  if (!fontsLoaded) {
+    return <LoadingScreen />;
+  }
+
   return (
     <AuthProvider>
       <RootLayoutNav />

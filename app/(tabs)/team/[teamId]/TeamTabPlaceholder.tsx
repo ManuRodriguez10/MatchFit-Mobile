@@ -2,6 +2,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Gradients } from '@/constants/colors';
+import { UI } from '@/constants/ui';
 
 interface TeamTabPlaceholderProps {
   title: string;
@@ -58,10 +59,12 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontSize: 24,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
   },
   subtitle: {
     color: '#64748B',
     fontSize: 15,
     fontWeight: '500',
+    fontFamily: UI.typography.medium,
   },
 });

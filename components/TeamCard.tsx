@@ -2,7 +2,10 @@ import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Gradients } from '@/constants/colors';
+import { UI } from '@/constants/ui';
 import { CoachRole } from '@/types/database';
+import Card from '@/components/ui/Card';
+import Chip from '@/components/ui/Chip';
 
 interface TeamCardProps {
   teamId: string;
@@ -41,77 +44,76 @@ export default function TeamCard({
   const isCoach = userRole === 'head_coach' || userRole === 'assistant_coach';
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
-      {/* Gradient shield icon */}
-      <LinearGradient
-        colors={Gradients.primary as unknown as string[]}
-        style={styles.iconCircle}
-      >
-        <Ionicons name="shield" size={22} color="#fff" />
-      </LinearGradient>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.82}>
+      <Card style={styles.card}>
+        <LinearGradient
+          colors={Gradients.primary as unknown as string[]}
+          style={styles.iconCircle}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Ionicons name="shield" size={20} color="#fff" />
+        </LinearGradient>
 
-      {/* Team info */}
-      <View style={styles.info}>
-        <Text style={styles.teamName} numberOfLines={1}>{teamName}</Text>
-        <View style={styles.metaRow}>
-          <Ionicons name="people-outline" size={13} color={Colors.textSecondary} />
-          <Text style={styles.metaText}>
-            {memberCount} {memberCount === 1 ? 'member' : 'members'}
-          </Text>
-        </View>
-        {isCoach && inviteCode ? (
+        <View style={styles.info}>
+          <Text style={styles.teamName} numberOfLines={1}>{teamName}</Text>
           <View style={styles.metaRow}>
-            <Ionicons name="key-outline" size={13} color={Colors.primary} />
-            <Text style={styles.codeText}>{inviteCode}</Text>
+            <Ionicons name="people-outline" size={13} color={Colors.textSecondary} />
+            <Text style={styles.metaText}>
+              {memberCount} {memberCount === 1 ? 'member' : 'members'}
+            </Text>
           </View>
-        ) : null}
-      </View>
-
-      {/* Role badge + chevron */}
-      <View style={styles.right}>
-        <View style={[styles.roleBadge, { backgroundColor: ROLE_COLORS[userRole] }]}>
-          <Text style={[styles.roleText, { color: ROLE_TEXT_COLORS[userRole] }]}>
-            {ROLE_LABELS[userRole]}
-          </Text>
+          {isCoach && inviteCode ? (
+            <View style={styles.metaRow}>
+              <Ionicons name="key-outline" size={13} color={Colors.primary} />
+              <Text style={styles.codeText}>{inviteCode}</Text>
+            </View>
+          ) : null}
         </View>
-        <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-      </View>
+
+        <View style={styles.right}>
+          <Chip
+            label={ROLE_LABELS[userRole]}
+            tone={userRole === 'player' ? 'mint' : 'primary'}
+            style={[styles.roleBadge, { backgroundColor: ROLE_COLORS[userRole] }]}
+            textStyle={[styles.roleText, { color: ROLE_TEXT_COLORS[userRole] }]}
+          />
+          <View style={styles.chevronWrap}>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+          </View>
+        </View>
+      </Card>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.background,
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: UI.radius.xl,
+    padding: UI.spacing.md,
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    gap: UI.spacing.sm,
   },
   iconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 56,
+    height: 56,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   info: {
     flex: 1,
-    gap: 4,
+    gap: 5,
   },
   teamName: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     color: Colors.textPrimary,
+    fontFamily: UI.typography.bold,
   },
   metaRow: {
     flexDirection: 'row',
@@ -121,25 +123,38 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 13,
     color: Colors.textSecondary,
+    fontFamily: UI.typography.medium,
   },
   codeText: {
     fontSize: 13,
     color: Colors.primary,
-    fontWeight: '600',
+    fontWeight: '700',
     letterSpacing: 1,
+    fontFamily: UI.typography.bold,
   },
   right: {
     alignItems: 'flex-end',
-    gap: 6,
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    paddingLeft: 6,
   },
   roleBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    minHeight: 28,
   },
   roleText: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.3,
+    fontFamily: UI.typography.bold,
+  },
+  chevronWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: Colors.borderSoft,
   },
 });
