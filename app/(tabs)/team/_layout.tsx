@@ -9,6 +9,8 @@ export default function TeamLayout() {
         name="create-event"
         options={{ headerShown: false }}
       />
+      <Stack.Screen name="event-detail" options={{ headerShown: false }} />
+      <Stack.Screen name="edit-event" options={{ headerShown: false }} />
       <Stack.Screen
         name="create"
         options={{

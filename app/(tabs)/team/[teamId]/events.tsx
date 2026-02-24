@@ -32,6 +32,7 @@ interface EventItem {
   location: string | null;
   date: string;
   kickoff_time: string | null;
+  recurrence_group_id: string | null;
 }
 
 const EVENT_COLORS: Record<EventItem['event_type'], string> = {
@@ -140,7 +141,7 @@ export default function TeamEventsScreen() {
       try {
         const { data, error } = await supabase
           .from('events')
-          .select('id, event_type, title, opponent, location, date, kickoff_time')
+          .select('id, event_type, title, opponent, location, date, kickoff_time, recurrence_group_id')
           .eq('team_id', teamId)
           .order('date', { ascending: true });
         if (error) console.warn('Events fetch error:', error.message);
@@ -252,36 +253,46 @@ export default function TeamEventsScreen() {
   // ── Render helpers ────────────────────────────────────────────────────
 
   const renderEventCard = (event: EventItem, options?: { showBorder?: boolean }) => (
-    <Card
+    <TouchableOpacity
       key={event.id}
-      muted
-      style={[
-        styles.eventCard,
-        options?.showBorder && { borderLeftWidth: 4, borderLeftColor: EVENT_COLORS[event.event_type] },
-      ]}
+      activeOpacity={0.7}
+      onPress={() =>
+        router.push({
+          pathname: '/team/event-detail',
+          params: { teamId, eventId: event.id },
+        })
+      }
     >
-      <View style={styles.eventTopRow}>
-        <Text style={styles.eventTitle}>{eventTitle(event)}</Text>
-        <View style={[styles.typePill, { backgroundColor: EVENT_COLORS[event.event_type] + '18' }]}>
-          <Text style={[styles.typePillText, { color: EVENT_COLORS[event.event_type] }]}>
-            {event.event_type}
+      <Card
+        muted
+        style={[
+          styles.eventCard,
+          options?.showBorder && { borderLeftWidth: 4, borderLeftColor: EVENT_COLORS[event.event_type] },
+        ]}
+      >
+        <View style={styles.eventTopRow}>
+          <Text style={styles.eventTitle}>{eventTitle(event)}</Text>
+          <View style={[styles.typePill, { backgroundColor: EVENT_COLORS[event.event_type] + '18' }]}>
+            <Text style={[styles.typePillText, { color: EVENT_COLORS[event.event_type] }]}>
+              {event.event_type}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.metaRow}>
+          <Ionicons name="calendar-outline" size={12} color="#64748B" />
+          <Text style={styles.metaText}>
+            {formatDisplayDate(event.date)}
+            {event.kickoff_time ? `, ${event.kickoff_time}` : ''}
           </Text>
         </View>
-      </View>
-      <View style={styles.metaRow}>
-        <Ionicons name="calendar-outline" size={12} color="#64748B" />
-        <Text style={styles.metaText}>
-          {formatDisplayDate(event.date)}
-          {event.kickoff_time ? `, ${event.kickoff_time}` : ''}
-        </Text>
-      </View>
-      {event.location ? (
-        <View style={styles.metaRow}>
-          <Ionicons name="location-outline" size={12} color="#64748B" />
-          <Text style={styles.metaText}>{event.location}</Text>
-        </View>
-      ) : null}
-    </Card>
+        {event.location ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="location-outline" size={12} color="#64748B" />
+            <Text style={styles.metaText}>{event.location}</Text>
+          </View>
+        ) : null}
+      </Card>
+    </TouchableOpacity>
   );
 
   const renderEmptyState = (message: string) => (
