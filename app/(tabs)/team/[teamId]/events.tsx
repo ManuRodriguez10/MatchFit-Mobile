@@ -8,10 +8,13 @@ import {
   TouchableOpacity,
   Modal,
   Pressable,
+  Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { Colors, Gradients } from '@/constants/colors';
 import { UI } from '@/constants/ui';
@@ -117,6 +120,8 @@ function eventTitle(event: EventItem): string {
 
 export default function TeamEventsScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
+  const insets = useSafeAreaInsets();
+  const { height: viewportHeight } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>('calendar');
@@ -209,6 +214,19 @@ export default function TeamEventsScreen() {
   const monthLabel = new Date(calendarMonth.year, calendarMonth.month).toLocaleDateString(
     'en-US',
     { month: 'long', year: 'numeric' },
+  );
+
+  // Match the floating team tab bar dimensions/offset so content always clears it.
+  const floatingTabBarHeight = 58;
+  const floatingTabBarOuterPadding =
+    Platform.OS === 'ios' ? Math.max(insets.bottom + 2, 12) : 10;
+  const navbarSafeGap = floatingTabBarHeight + floatingTabBarOuterPadding + 20;
+  const contentBottomPadding = navbarSafeGap + 24;
+
+  // Cap the nested week list so it scrolls inside the panel and stays above the floating navbar.
+  const weekListMaxHeight = Math.max(
+    240,
+    Math.min(560, Math.round(viewportHeight - navbarSafeGap - 360)),
   );
 
   // Default selected day to today so Day View is immediately visible under calendar
@@ -335,7 +353,7 @@ export default function TeamEventsScreen() {
           );
         })}
       </View>
-
+      <View style={styles.panelBottomSpacer} />
     </Card>
   );
 
@@ -349,6 +367,7 @@ export default function TeamEventsScreen() {
       {eventsOnSelectedDay.length === 0
         ? renderEmptyState('No events on this day.')
         : eventsOnSelectedDay.map((e) => renderEventCard(e))}
+      <View style={styles.panelBottomSpacer} />
     </Card>
   );
 
@@ -364,7 +383,7 @@ export default function TeamEventsScreen() {
 
         {/* Weekly list (top-to-bottom) */}
         <ScrollView
-          style={styles.weekListScroller}
+          style={[styles.weekListScroller, { maxHeight: weekListMaxHeight }]}
           contentContainerStyle={styles.weekGrid}
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}
@@ -421,6 +440,7 @@ export default function TeamEventsScreen() {
             </View>
           ))}
         </View>
+        <View style={styles.panelBottomSpacer} />
       </Card>
     );
   };
@@ -432,6 +452,7 @@ export default function TeamEventsScreen() {
       {pastEvents.length === 0
         ? renderEmptyState('No past events yet.')
         : pastEvents.map((e) => renderEventCard(e, { showBorder: true }))}
+      <View style={styles.panelBottomSpacer} />
     </Card>
   );
 
@@ -458,14 +479,17 @@ export default function TeamEventsScreen() {
       <View style={styles.decorCircle1} />
       <View style={styles.decorCircle2} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
+      >
         {/* Header row */}
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Team Calendar</Text>
             <Text style={styles.subtitle}>Schedule and upcoming sessions</Text>
           </View>
-          <TouchableOpacity style={styles.createBtn} activeOpacity={0.7} onPress={() => router.push(`/team/${teamId}/create-event`)}>
+          <TouchableOpacity style={styles.createBtn} activeOpacity={0.7} onPress={() => router.push({ pathname: '/team/create-event', params: { teamId } })}>
             <Ionicons name="add" size={20} color="#fff" />
             <Text style={styles.createBtnText}>New</Text>
           </TouchableOpacity>
@@ -567,7 +591,6 @@ const styles = StyleSheet.create({
   content: {
     paddingTop: 88,
     paddingHorizontal: 20,
-    paddingBottom: 220,
     gap: 16,
   },
   centerState: {
@@ -655,6 +678,9 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 14,
     gap: 10,
+  },
+  panelBottomSpacer: {
+    height: 6,
   },
   panelTitle: {
     color: Colors.textPrimary,
@@ -814,7 +840,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   weekListScroller: {
-    maxHeight: 500,
+    minHeight: 220,
   },
   weekRow: {
     flexDirection: 'row',

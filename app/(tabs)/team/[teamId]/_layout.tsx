@@ -35,7 +35,7 @@ function TeamTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   const visibleRoutes = useMemo(
     () => state.routes.filter(
-      (r) => r.name !== 'TeamTabPlaceholder' && r.name !== 'create-event'
+      (r) => r.name !== 'TeamTabPlaceholder'
     ),
     [state.routes]
   );
@@ -142,7 +142,6 @@ export default function TeamDetailLayout() {
       <Tabs.Screen name="roster" options={{ title: 'Roster' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
-      <Tabs.Screen name="create-event" options={{ href: null, title: 'Create Event' }} />
       <Tabs.Screen
         name="TeamTabPlaceholder"
         options={{

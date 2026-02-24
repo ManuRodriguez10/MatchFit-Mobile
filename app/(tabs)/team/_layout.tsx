@@ -6,6 +6,10 @@ export default function TeamLayout() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="[teamId]" options={{ headerShown: false }} />
       <Stack.Screen
+        name="create-event"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
         name="create"
         options={{
           presentation: 'modal',
