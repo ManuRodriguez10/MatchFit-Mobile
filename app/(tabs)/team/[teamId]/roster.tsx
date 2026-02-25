@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useGlobalSearchParams, router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from '@/utils/reanimated-shim';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -115,7 +115,7 @@ function RosterMemberItem({
 // ── Roster Screen ─────────────────────────────────────────────
 
 export default function RosterScreen() {
-  const { teamId } = useLocalSearchParams<{ teamId: string }>();
+  const { teamId } = useGlobalSearchParams<{ teamId: string }>();
   const { profile } = useAuth();
   const isCoach = profile?.role === 'coach' || profile?.role === 'admin';
 

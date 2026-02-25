@@ -11,7 +11,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, useGlobalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -69,6 +69,15 @@ const CALENDAR_MONTH_LABELS = [
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// Generate UUID v4 format string for recurring event groups
+function generateUUIDv4(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 function parseTime(raw: string): Date | null {
   const trimmed = raw.trim();
@@ -276,8 +285,36 @@ interface FormErrors {
 }
 
 export default function CreateEventScreen() {
-  const { teamId } = useLocalSearchParams<{ teamId: string }>();
+  const localParams = useLocalSearchParams();
+  const globalParams = useGlobalSearchParams();
+  const paramTeamId = (localParams.teamId ?? globalParams.teamId) as string | undefined;
   const { user } = useAuth();
+
+  // Fallback: if teamId not in params, fetch from team_coaches
+  const [resolvedTeamId, setResolvedTeamId] = useState<string | undefined>(paramTeamId);
+
+  React.useEffect(() => {
+    if (paramTeamId) {
+      setResolvedTeamId(paramTeamId);
+      return;
+    }
+    // Fallback: get the user's team from team_coaches
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from('team_coaches')
+        .select('team_id')
+        .eq('coach_id', user.id)
+        .limit(1)
+        .single();
+      if (data?.team_id) {
+        setResolvedTeamId(data.team_id);
+      }
+    })();
+  }, [paramTeamId, user]);
+
+  const teamId = resolvedTeamId;
+
   // Form state
   const [eventType, setEventType] = useState<EventType | null>(null);
   const [title, setTitle] = useState('');
@@ -479,6 +516,15 @@ export default function CreateEventScreen() {
       return;
     }
 
+    if (!teamId) {
+      setGeneralError('No team selected. Please go back and try again.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
+    // Debug: log values being sent
+    console.log('CREATE EVENT DEBUG:', { teamId, userId: user.id, eventType, title });
+
     setLoading(true);
     try {
       const parsedDate = parseDateStr(date)!;
@@ -487,7 +533,7 @@ export default function CreateEventScreen() {
 
       if (repeatEnabled && recurringDates.length > 0) {
         // Recurring event
-        const groupId = crypto.randomUUID();
+        const groupId = generateUUIDv4();
         const rows = recurringDates.map((d) => ({
           team_id: teamId,
           event_type: eventType,
@@ -583,6 +629,17 @@ export default function CreateEventScreen() {
       setErrors((prev) => ({ ...prev, repeatEndDate: undefined }));
     } else {
       setDate(formatted);
+      setErrors((prev) => ({ ...prev, date: undefined }));
+    }
+    setShowDatePicker(false);
+  }
+
+  function clearDateFromCalendar() {
+    if (datePickerTarget === 'repeat_end_date') {
+      setRepeatEndDate('');
+      setErrors((prev) => ({ ...prev, repeatEndDate: undefined }));
+    } else {
+      setDate('');
       setErrors((prev) => ({ ...prev, date: undefined }));
     }
     setShowDatePicker(false);
@@ -1123,6 +1180,12 @@ export default function CreateEventScreen() {
             </View>
 
             <View style={styles.calendarModalActions}>
+              <TouchableOpacity
+                style={styles.calendarActionBtn}
+                onPress={clearDateFromCalendar}
+              >
+                <Text style={styles.calendarActionBtnText}>Clear</Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.calendarActionBtn}
                 onPress={() => setShowDatePicker(false)}

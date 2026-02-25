@@ -3,6 +3,19 @@ import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import { Database } from '@/types/database';
 
+// Polyfill crypto.getRandomValues for Supabase and other libraries
+if (!global.crypto) {
+  global.crypto = {} as any;
+}
+if (!global.crypto.getRandomValues) {
+  global.crypto.getRandomValues = (array: any) => {
+    for (let i = 0; i < array.length; i++) {
+      array[i] = Math.floor(Math.random() * 256);
+    }
+    return array;
+  };
+}
+
 // Supabase URL and anon key from environment variables
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;

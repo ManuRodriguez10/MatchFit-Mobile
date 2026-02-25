@@ -10,8 +10,9 @@ import {
   Pressable,
   Platform,
   useWindowDimensions,
+  Alert,
 } from 'react-native';
-import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useGlobalSearchParams, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -120,7 +121,8 @@ function eventTitle(event: EventItem): string {
 // ---------------------------------------------------------------------------
 
 export default function TeamEventsScreen() {
-  const { teamId } = useLocalSearchParams<{ teamId: string }>();
+  const { teamId } = useGlobalSearchParams<{ teamId: string }>();
+  console.log('EVENTS teamId:', teamId);
   const insets = useSafeAreaInsets();
   const { height: viewportHeight } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
@@ -302,6 +304,94 @@ export default function TeamEventsScreen() {
     </Card>
   );
 
+  const renderModalEmptyState = (message: string) => (
+    <View style={styles.modalEmptyPanel}>
+      <Ionicons name="calendar-clear-outline" size={28} color="#94A3B8" />
+      <Text style={styles.modalEmptyText}>{message}</Text>
+    </View>
+  );
+
+  const openEventEditor = (event: EventItem) => {
+    setSelectedWeekDay(null);
+    router.push({
+      pathname: '/team/edit-event',
+      params: {
+        teamId,
+        eventId: event.id,
+        ...(event.recurrence_group_id ? { recurrenceGroupId: event.recurrence_group_id } : {}),
+      },
+    });
+  };
+
+  const deleteEventFromModal = (event: EventItem) => {
+    Alert.alert(
+      'Delete Event',
+      `Delete "${eventTitle(event)}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await supabase.from('events').delete().eq('id', event.id);
+            if (error) {
+              Alert.alert('Delete failed', error.message);
+              return;
+            }
+            setEvents((prev) => prev.filter((e) => e.id !== event.id));
+          },
+        },
+      ],
+    );
+  };
+
+  const renderModalEventCard = (event: EventItem) => (
+    <Card muted key={event.id} style={styles.modalEventCard}>
+      <View style={styles.modalEventTopRow}>
+        <View style={styles.modalEventTitleWrap}>
+          <Text style={styles.eventTitle}>{eventTitle(event)}</Text>
+          <View style={[styles.typePill, { backgroundColor: EVENT_COLORS[event.event_type] + '18' }]}>
+            <Text style={[styles.typePillText, { color: EVENT_COLORS[event.event_type] }]}>
+              {event.event_type}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.modalEventActions}>
+          <TouchableOpacity
+            style={styles.modalIconBtn}
+            activeOpacity={0.7}
+            onPress={() => openEventEditor(event)}
+          >
+            <Ionicons name="create-outline" size={16} color="#334155" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.modalIconBtn}
+            activeOpacity={0.7}
+            onPress={() => deleteEventFromModal(event)}
+          >
+            <Ionicons name="trash-outline" size={16} color="#DC2626" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.modalEventMetaBlock}>
+        <View style={styles.metaRow}>
+          <Ionicons name="calendar-outline" size={12} color="#64748B" />
+          <Text style={styles.metaText}>
+            {formatDisplayDate(event.date)}
+            {event.kickoff_time ? `, ${event.kickoff_time}` : ''}
+          </Text>
+        </View>
+        {event.location ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="location-outline" size={12} color="#64748B" />
+            <Text style={styles.metaText}>{event.location}</Text>
+          </View>
+        ) : null}
+      </View>
+    </Card>
+  );
+
   // ── Calendar tab ──────────────────────────────────────────────────────
   const renderCalendar = () => (
     <Card padded={false} style={styles.panel}>
@@ -371,13 +461,32 @@ export default function TeamEventsScreen() {
   // ── Day view (separate grid below calendar) ───────────────────────────
   const renderDayView = () => (
     <Card padded={false} style={styles.panel}>
-      <Text style={styles.panelTitle}>Day View</Text>
-      <Text style={styles.selectedDayTitle}>
-        {selectedCalendarDay ? formatDisplayDate(selectedCalendarDay) : formatDisplayDate(todayStr)}
-      </Text>
+      <View style={styles.dayViewHeader}>
+        <View style={styles.dayViewHeaderTextWrap}>
+          <Text style={styles.panelTitle}>
+            {selectedCalendarDay ? formatDisplayDate(selectedCalendarDay) : formatDisplayDate(todayStr)}
+          </Text>
+          <Text style={styles.dayViewCountText}>
+            {eventsOnSelectedDay.length} event{eventsOnSelectedDay.length === 1 ? '' : 's'} scheduled
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.dayViewAddBtn}
+          activeOpacity={0.7}
+          onPress={() =>
+            router.push({
+              pathname: '/team/create-event',
+              params: { teamId },
+            })
+          }
+        >
+          <Ionicons name="add" size={14} color="#fff" />
+          <Text style={styles.dayViewAddBtnText}>Add Event</Text>
+        </TouchableOpacity>
+      </View>
       {eventsOnSelectedDay.length === 0
         ? renderEmptyState('No events on this day.')
-        : eventsOnSelectedDay.map((e) => renderEventCard(e))}
+        : eventsOnSelectedDay.map((e) => renderModalEventCard(e))}
       <View style={styles.panelBottomSpacer} />
     </Card>
   );
@@ -547,26 +656,50 @@ export default function TeamEventsScreen() {
         onRequestClose={() => setSelectedWeekDay(null)}
       >
         <Pressable style={styles.modalBackdrop} onPress={() => setSelectedWeekDay(null)}>
-          <Pressable onPress={() => {}}>
+          <Pressable style={styles.modalCardWrap} onPress={() => {}}>
             <Card padded={false} style={styles.modalCard}>
               <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {selectedWeekDay ? formatDisplayDate(selectedWeekDay) : 'Selected Day'}
-              </Text>
-              <TouchableOpacity onPress={() => setSelectedWeekDay(null)} hitSlop={8}>
-                <Ionicons name="close" size={20} color="#334155" />
-              </TouchableOpacity>
+                <View style={styles.modalHeaderTextWrap}>
+                  <Text style={styles.modalTitle}>
+                    {selectedWeekDay ? formatDisplayDate(selectedWeekDay) : 'Selected Day'}
+                  </Text>
+                  <Text style={styles.modalSubtitle}>
+                    {eventsOnSelectedWeekDay.length} event{eventsOnSelectedWeekDay.length === 1 ? '' : 's'} scheduled
+                  </Text>
+                </View>
+                <View style={styles.modalHeaderActions}>
+                  <TouchableOpacity
+                    style={styles.modalAddBtn}
+                    activeOpacity={0.7}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/team/create-event',
+                        params: { teamId },
+                      })
+                    }
+                  >
+                    <Ionicons name="add" size={14} color="#fff" />
+                    <Text style={styles.modalAddBtnText}>Add Event</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setSelectedWeekDay(null)} hitSlop={8}>
+                    <Ionicons name="close" size={20} color="#334155" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <ScrollView
-                style={styles.modalContent}
-                contentContainerStyle={styles.modalContentInner}
-                showsVerticalScrollIndicator={false}
-              >
-                {eventsOnSelectedWeekDay.length === 0
-                  ? renderEmptyState('No events scheduled for this day.')
-                  : eventsOnSelectedWeekDay.map((e) => renderEventCard(e))}
-              </ScrollView>
+              {eventsOnSelectedWeekDay.length === 0 ? (
+                <View style={styles.modalEmptyContent}>
+                  {renderModalEmptyState('No events on this day.')}
+                </View>
+              ) : (
+                <ScrollView
+                  style={styles.modalContent}
+                  contentContainerStyle={styles.modalContentInner}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {eventsOnSelectedWeekDay.map((e) => renderModalEventCard(e))}
+                </ScrollView>
+              )}
             </Card>
           </Pressable>
         </Pressable>
@@ -831,10 +964,37 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 2.5,
   },
-  selectedDayTitle: {
-    color: Colors.textPrimary,
-    fontSize: 14,
-    marginTop: -4,
+  dayViewHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 4,
+  },
+  dayViewHeaderTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  dayViewCountText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: UI.typography.medium,
+    marginTop: 6,
+  },
+  dayViewAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginTop: 2,
+  },
+  dayViewAddBtnText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: '700',
     fontFamily: UI.typography.bold,
   },
@@ -953,18 +1113,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
   },
+  modalCardWrap: {
+    width: '100%',
+    maxWidth: 520,
+  },
   modalCard: {
     width: '100%',
     maxWidth: 520,
-    maxHeight: '70%',
+    maxHeight: '62%',
+    minHeight: 220,
     borderRadius: 24,
     padding: 16,
   },
   modalHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 12,
+    gap: 10,
+  },
+  modalHeaderTextWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   modalTitle: {
     color: Colors.textPrimary,
@@ -972,10 +1142,96 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontFamily: UI.typography.bold,
   },
+  modalSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: UI.typography.medium,
+    marginTop: 2,
+  },
+  modalHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  modalAddBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: UI.typography.bold,
+  },
   modalContent: {
     flexGrow: 0,
   },
+  modalEmptyContent: {
+    minHeight: 150,
+    justifyContent: 'center',
+  },
+  modalEmptyPanel: {
+    minHeight: 120,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: Colors.borderSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+  },
+  modalEmptyText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: UI.typography.medium,
+    textAlign: 'center',
+  },
   modalContentInner: {
     gap: 10,
+  },
+  modalEventCard: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 0,
+  },
+  modalEventTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  modalEventTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+    gap: 8,
+  },
+  modalEventMetaBlock: {
+    marginTop: 10,
+    gap: 6,
+  },
+  modalEventActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  modalIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.borderSoft,
   },
 });

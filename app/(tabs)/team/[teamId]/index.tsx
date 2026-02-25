@@ -7,7 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useGlobalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
@@ -39,7 +39,7 @@ function formatDate(isoDate: string) {
 }
 
 export default function TeamDashboardScreen() {
-  const { teamId } = useLocalSearchParams<{ teamId: string }>();
+  const { teamId } = useGlobalSearchParams<{ teamId: string }>();
   const { profile } = useAuth();
 
   const [loading, setLoading] = useState(true);
