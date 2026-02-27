@@ -15,6 +15,7 @@ import { Colors, Gradients } from '@/constants/colors';
 import { UI } from '@/constants/ui';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import GradientText from '@/components/ui/GradientText';
 
 interface EventDetail {
   id: string;
@@ -31,7 +32,7 @@ interface EventDetail {
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
   game: '#EF4444',
-  practice: '#3B82F6',
+  practice: '#118FF3',
   tournament: '#F59E0B',
   meeting: '#8B5CF6',
 };
@@ -96,7 +97,7 @@ export default function EventDetailScreen() {
     );
   }
 
-  const color = EVENT_TYPE_COLORS[event.event_type] ?? '#3B82F6';
+  const color = EVENT_TYPE_COLORS[event.event_type] ?? '#118FF3';
 
   return (
     <LinearGradient
@@ -122,9 +123,16 @@ export default function EventDetailScreen() {
             <Ionicons name="arrow-back" size={20} color="#fff" />
           </TouchableOpacity>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.headerTitle}>
-              {event.title?.trim() || (event.event_type === 'game' && event.opponent ? `vs ${event.opponent}` : event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1))}
-            </Text>
+            <GradientText
+              text={
+                event.title?.trim()
+                || (event.event_type === 'game' && event.opponent
+                  ? `vs ${event.opponent}`
+                  : event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1))
+              }
+              style={styles.headerTitle}
+              colors={['#FFFFFF', '#D4EBFC']}
+            />
             <View style={[styles.typeBadge, { backgroundColor: color + '30' }]}>
               <Text style={[styles.typeBadgeText, { color }]}>
                 {event.event_type}

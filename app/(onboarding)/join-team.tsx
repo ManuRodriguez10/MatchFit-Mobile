@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Gradients } from '@/constants/colors';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import GradientText from '@/components/ui/GradientText';
 
 export default function OnboardingJoinTeamScreen() {
   const { user, completeOnboarding } = useAuth();
@@ -141,7 +142,11 @@ export default function OnboardingJoinTeamScreen() {
             >
               <Ionicons name="people" size={32} color="#fff" />
             </LinearGradient>
-            <Text style={styles.title}>Join a Team</Text>
+            <GradientText
+              text="Join a Team"
+              style={styles.title}
+              colors={['#FFFFFF', '#D4EBFC']}
+            />
             <Text style={styles.subtitle}>
               Enter the 6-character code shared by a head coach to join as assistant coach
             </Text>

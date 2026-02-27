@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, ViewProps, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import { UI } from '@/constants/ui';
 
@@ -26,6 +27,13 @@ export default function Card({
         style,
       ]}
     >
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255,255,255,0.78)', 'rgba(212,235,252,0.22)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.overlay}
+      />
       {children}
     </View>
   );
@@ -37,6 +45,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.borderSoft,
     borderRadius: UI.radius.xl,
+    overflow: 'hidden',
     ...UI.shadow.card,
   },
   muted: {
@@ -44,5 +53,8 @@ const styles = StyleSheet.create({
   },
   padded: {
     padding: UI.spacing.md,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
   },
 });

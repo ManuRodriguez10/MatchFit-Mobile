@@ -77,7 +77,7 @@ export default function Button({
         activeOpacity={0.8}
       >
         <LinearGradient
-          colors={isDisabled ? ['#9CA3AF', '#6B7280'] : (Gradients.darkButton as unknown as string[])}
+          colors={isDisabled ? ['#9CA3AF', '#6B7280'] : ['#118FF3', '#0C5798']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={[
@@ -107,6 +107,13 @@ export default function Button({
       ]}
       activeOpacity={0.8}
     >
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255,255,255,0.5)', 'rgba(212,235,252,0.2)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.surfaceOverlay}
+      />
       {renderContent()}
     </AnimatedTouchable>
   );
@@ -152,5 +159,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
+  },
+  surfaceOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
 });

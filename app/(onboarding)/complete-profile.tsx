@@ -21,6 +21,7 @@ import { Colors, Gradients } from '@/constants/colors';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { PlayerPosition } from '@/types/database';
+import GradientText from '@/components/ui/GradientText';
 
 const POSITIONS: { key: PlayerPosition; abbr: string; label: string; icon: string }[] = [
   { key: 'goalkeeper', abbr: 'GK', label: 'Goalkeeper', icon: 'hand-left-outline' },
@@ -256,7 +257,11 @@ export default function CompleteProfileScreen() {
             >
               <Ionicons name="football" size={32} color="#fff" />
             </LinearGradient>
-            <Text style={styles.title}>Complete Your Profile</Text>
+            <GradientText
+              text="Complete Your Profile"
+              style={styles.title}
+              colors={['#FFFFFF', '#D4EBFC']}
+            />
             <Text style={styles.subtitle}>Fill in your information for {teamName}</Text>
           </Animated.View>
 
@@ -282,7 +287,11 @@ export default function CompleteProfileScreen() {
                 ) : null}
 
                 {/* ═══ BASIC INFO ═══ */}
-                <Text style={styles.sectionTitle}>Basic Information</Text>
+                <GradientText
+                  text="Basic Information"
+                  style={styles.sectionTitle}
+                  colors={['#118FF3', '#0C5798']}
+                />
 
                 <Input
                   label="First Name"
@@ -343,7 +352,11 @@ export default function CompleteProfileScreen() {
                 <View style={styles.divider} />
 
                 {/* ═══ SOCCER DETAILS ═══ */}
-                <Text style={styles.sectionTitle}>Soccer Details</Text>
+                <GradientText
+                  text="Soccer Details"
+                  style={styles.sectionTitle}
+                  colors={['#118FF3', '#0C5798']}
+                />
 
                 <Text style={styles.fieldLabel}>Playing Position</Text>
                 <View style={styles.positionGrid}>
@@ -410,7 +423,11 @@ export default function CompleteProfileScreen() {
                 <View style={styles.divider} />
 
                 {/* ═══ PHYSICAL INFO ═══ */}
-                <Text style={styles.sectionTitle}>Physical Information</Text>
+                <GradientText
+                  text="Physical Information"
+                  style={styles.sectionTitle}
+                  colors={['#118FF3', '#0C5798']}
+                />
 
                 <View style={styles.heightRow}>
                   <View style={{ flex: 1 }}>
@@ -463,7 +480,11 @@ export default function CompleteProfileScreen() {
                 <View style={styles.divider} />
 
                 {/* ═══ CONTACT ═══ */}
-                <Text style={styles.sectionTitle}>Contact Information</Text>
+                <GradientText
+                  text="Contact Information"
+                  style={styles.sectionTitle}
+                  colors={['#118FF3', '#0C5798']}
+                />
 
                 <Input
                   label="Phone Number"

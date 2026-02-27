@@ -22,6 +22,7 @@ import { Colors, Gradients } from '@/constants/colors';
 import { UI } from '@/constants/ui';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import GradientText from '@/components/ui/GradientText';
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -37,9 +38,9 @@ const EVENT_TYPE_OPTIONS: { key: EventType; label: string; icon: keyof typeof Io
 ];
 
 const EVENT_TYPE_COLORS: Record<EventType, string> = {
-  game: '#3B82F6',
-  practice: '#3B82F6',
-  meeting: '#3B82F6',
+  game: '#118FF3',
+  practice: '#118FF3',
+  meeting: '#118FF3',
 };
 
 const GAME_VENUE_OPTIONS: { key: GameVenueType; label: string }[] = [
@@ -489,7 +490,11 @@ export default function EditEventScreen() {
               <Ionicons name="arrow-back" size={20} color="#fff" />
             </TouchableOpacity>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.headerTitle}>Edit Event</Text>
+              <GradientText
+                text="Edit Event"
+                style={styles.headerTitle}
+                colors={['#FFFFFF', '#D4EBFC']}
+              />
               <Text style={styles.headerSubtitle}>Update event details</Text>
             </View>
           </View>

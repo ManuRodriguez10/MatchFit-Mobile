@@ -20,6 +20,8 @@ import { supabase } from '@/lib/supabase';
 import { Colors, Gradients } from '@/constants/colors';
 import { UI } from '@/constants/ui';
 import Card from '@/components/ui/Card';
+import { showToast } from '@/components/ui/Toast';
+import GradientText from '@/components/ui/GradientText';
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -38,7 +40,7 @@ interface EventItem {
 
 const EVENT_COLORS: Record<EventItem['event_type'], string> = {
   game: '#EF4444',
-  practice: '#3B82F6',
+  practice: '#118FF3',
   tournament: '#F59E0B',
   meeting: '#8B5CF6',
 };
@@ -122,7 +124,6 @@ function eventTitle(event: EventItem): string {
 
 export default function TeamEventsScreen() {
   const { teamId } = useGlobalSearchParams<{ teamId: string }>();
-  console.log('EVENTS teamId:', teamId);
   const insets = useSafeAreaInsets();
   const { height: viewportHeight } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
@@ -335,10 +336,11 @@ export default function TeamEventsScreen() {
           onPress: async () => {
             const { error } = await supabase.from('events').delete().eq('id', event.id);
             if (error) {
-              Alert.alert('Delete failed', error.message);
+              showToast('error', 'Delete failed', error.message);
               return;
             }
             setEvents((prev) => prev.filter((e) => e.id !== event.id));
+            showToast('success', 'Event deleted');
           },
         },
       ],
@@ -606,7 +608,11 @@ export default function TeamEventsScreen() {
         {/* Header row */}
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Team Calendar</Text>
+            <GradientText
+              text="Team Calendar"
+              style={styles.title}
+              colors={['#FFFFFF', '#D4EBFC']}
+            />
             <Text style={styles.subtitle}>Schedule and upcoming sessions</Text>
           </View>
           <TouchableOpacity style={styles.createBtn} activeOpacity={0.7} onPress={() => router.push({ pathname: '/team/create-event', params: { teamId } })}>

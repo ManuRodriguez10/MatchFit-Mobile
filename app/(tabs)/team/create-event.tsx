@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Gradients } from '@/constants/colors';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import GradientText from '@/components/ui/GradientText';
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -39,9 +40,9 @@ const EVENT_TYPE_OPTIONS: { key: EventType; label: string; icon: keyof typeof Io
 ];
 
 const EVENT_TYPE_COLORS: Record<EventType, string> = {
-  game: '#3B82F6',
-  practice: '#3B82F6',
-  meeting: '#3B82F6',
+  game: '#118FF3',
+  practice: '#118FF3',
+  meeting: '#118FF3',
 };
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -707,7 +708,11 @@ export default function CreateEventScreen() {
               <Ionicons name="arrow-back" size={20} color="#fff" />
             </TouchableOpacity>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.headerTitle}>Create Event</Text>
+              <GradientText
+                text="Create Event"
+                style={styles.headerTitle}
+                colors={['#FFFFFF', '#D4EBFC']}
+              />
               <Text style={styles.headerSubtitle}>Fill in the details for your team</Text>
             </View>
           </View>

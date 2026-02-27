@@ -20,6 +20,7 @@ import { Colors, Gradients } from '@/constants/colors';
 import { lookupTeamByInviteCode } from '@/lib/teamInvite';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import GradientText from '@/components/ui/GradientText';
 
 export default function PlayerJoinTeamScreen() {
   const { user, signOut } = useAuth();
@@ -117,7 +118,11 @@ export default function PlayerJoinTeamScreen() {
             >
               <Ionicons name="football" size={32} color="#fff" />
             </LinearGradient>
-            <Text style={styles.title}>Join Your Team</Text>
+            <GradientText
+              text="Join Your Team"
+              style={styles.title}
+              colors={['#FFFFFF', '#D4EBFC']}
+            />
             <Text style={styles.subtitle}>
               Enter the 6-character code from your coach to join the team
             </Text>

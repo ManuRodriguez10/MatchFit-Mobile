@@ -1,42 +1,57 @@
-// MatchFit brand colors + soft modern UI palette
+// MatchFit brand colors — aligned with web design system
 export const Colors = {
-  // Primary blues
-  primary: '#3B82F6',
-  primaryDark: '#1E3A8A',
-  primaryLight: '#7CB7FF',
-  primarySoft: '#E8F0FF',
+  // Primary blues (matched to web: #118ff3)
+  primary: '#118FF3',
+  primaryDark: '#0C5798',
+  primaryLight: '#E7F3FE',
+  primarySoft: '#E7F3FE',
 
   // Backgrounds / surfaces
-  background: '#FCFBFF',
-  backgroundLight: '#F4F2FA',
+  background: '#F9FAFB',       // gray-50
+  backgroundGradientTop: '#D4EBFC', // pale blue page top
   surface: '#FFFFFF',
-  surfaceMuted: '#F3F4F8',
-  surfaceTint: '#F0EDFA',
+  surfaceMuted: '#F3F4F6',     // gray-100
+  surfaceTint: '#E7F3FE',
 
   // Text
-  textPrimary: '#111827',
-  textSecondary: '#6B7280',
-  textMuted: '#9CA3AF',
+  textPrimary: '#111827',      // gray-900
+  textSecondary: '#4B5563',    // gray-600
+  textMuted: '#9CA3AF',        // gray-400
   textOnDark: '#FFFFFF',
+  textOnPrimary: '#FFFFFF',
 
-  // Accent pastels
-  lavender: '#DCD1FF',
-  lavenderStrong: '#B9A4FF',
-  cream: '#F7E7B2',
-  creamStrong: '#F1D77D',
-  mint: '#CFEFE4',
+  // Accent colors (semantic — from web)
+  blue: '#118FF3',
+  blueSoft: '#E7F3FE',
+  emerald: '#10B981',
+  emeraldDark: '#059669',
+  emeraldSoft: '#D1FAE5',
+  purple: '#8B5CF6',
+  purpleDark: '#7C3AED',
+  purpleSoft: '#EDE9FE',
+  amber: '#D97706',
+  amberSoft: '#FEF3C7',
+  red: '#EF4444',
+  redSoft: '#FEE2E2',
+
+  // Legacy accent aliases (for backward compat)
+  lavender: '#EDE9FE',
+  lavenderStrong: '#8B5CF6',
+  cream: '#FEF3C7',
+  creamStrong: '#D97706',
+  mint: '#D1FAE5',
   mintStrong: '#10B981',
-  ink: '#16181D',
+  ink: '#111827',
 
   // Status
-  success: '#16A34A',
+  success: '#10B981',
   error: '#EF4444',
-  warning: '#F59E0B',
+  warning: '#D97706',
 
   // UI elements
-  border: '#E5E7EB',
-  borderSoft: '#ECECF3',
-  borderFocus: '#3B82F6',
+  border: '#E5E7EB',          // gray-200
+  borderSoft: '#F3F4F6',      // gray-100
+  borderFocus: '#118FF3',
 
   // Overlays / shadows
   backdrop: 'rgba(0, 0, 0, 0.5)',
@@ -45,12 +60,24 @@ export const Colors = {
 
 // Gradients
 export const Gradients = {
-  primary: ['#4F8FF7', '#274FB5'],
-  primaryLight: ['#7CB7FF', '#4F8FF7'],
-  success: ['#20C997', '#0EA879'],
-  backgroundSubtle: ['#F7F5FC', '#FFFFFF'],
-  lavender: ['#DCCFFF', '#C5B2FF'],
-  cream: ['#F8E8BE', '#F2DEA0'],
+  // Brand
+  primary: ['#118FF3', '#0C5798'],
+  primaryLight: ['#60B5FF', '#118FF3'],
+  brand: ['#118FF3', '#0C5798'],  // alias for sidebar/header use
+
+  // Stat cards (from web dashboard)
+  statBlue: ['#3B82F6', '#2563EB'],
+  statEmerald: ['#10B981', '#059669'],
+  statPurple: ['#8B5CF6', '#7C3AED'],
+
+  // Page background
+  pageBackground: ['#D4EBFC', '#E7F3FE', '#FFFFFF'],
+
+  // Surfaces
+  backgroundSubtle: ['#F9FAFB', '#FFFFFF'],
+  success: ['#10B981', '#059669'],
+
+  // Buttons
   darkButton: ['#1A1C22', '#111318'],
 } as const;
 

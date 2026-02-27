@@ -13,6 +13,7 @@ import Animated, {
   withSpring,
   withSequence,
 } from '@/utils/reanimated-shim';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { UI } from '@/constants/ui';
@@ -104,6 +105,13 @@ export default function Input({
           },
         ]}
       >
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(255,255,255,0.55)', 'rgba(212,235,252,0.24)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.inputOverlay}
+        />
         {icon && (
           <Ionicons
             name={icon}
@@ -161,6 +169,10 @@ const styles = StyleSheet.create({
     borderRadius: UI.radius.lg,
     paddingHorizontal: 16,
     height: 56,
+    overflow: 'hidden',
+  },
+  inputOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   icon: {
     marginRight: 12,

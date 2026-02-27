@@ -1,9 +1,5 @@
-import { View, Text } from 'react-native';
+import { Redirect } from 'expo-router';
 
 export default function EventsScreen() {
-  return (
-    <View className="flex-1 items-center justify-center bg-white">
-      <Text className="text-2xl font-bold">Events Screen</Text>
-    </View>
-  );
+  return <Redirect href="/team" />;
 }

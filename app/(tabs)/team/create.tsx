@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Gradients } from '@/constants/colors';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import GradientText from '@/components/ui/GradientText';
 
 export default function CreateTeamScreen() {
   const { user } = useAuth();
@@ -165,7 +166,11 @@ export default function CreateTeamScreen() {
           <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
             <Ionicons name="close" size={20} color={Colors.textSecondary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Team</Text>
+          <GradientText
+            text="Create Team"
+            style={styles.headerTitle}
+            colors={['#118FF3', '#0C5798']}
+          />
           <View style={styles.headerSpacer} />
         </Animated.View>
 

@@ -1,5 +1,7 @@
+import { View, StyleSheet } from 'react-native';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts } from 'expo-font';
 import {
   PlusJakartaSans_400Regular,
@@ -9,6 +11,7 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import LoadingScreen from '@/components/LoadingScreen';
+import ToastContainer from '@/components/ui/Toast';
 import '../global.css';
 
 function RootLayoutNav() {
@@ -55,7 +58,22 @@ function RootLayoutNav() {
     return <LoadingScreen />;
   }
 
-  return <Slot />;
+  const inAuthGroup = segments[0] === '(auth)';
+
+  return (
+    <View style={styles.appRoot}>
+      <Slot />
+      {!inAuthGroup ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(212,235,252,0.16)', 'rgba(231,243,254,0.10)', 'rgba(255,255,255,0.06)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.globalOverlay}
+        />
+      ) : null}
+    </View>
+  );
 }
 
 export default function RootLayout() {
@@ -72,7 +90,19 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <View style={{ flex: 1 }}>
+        <RootLayoutNav />
+        <ToastContainer />
+      </View>
     </AuthProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  appRoot: {
+    flex: 1,
+  },
+  globalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+});

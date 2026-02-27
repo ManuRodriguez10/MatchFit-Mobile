@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Gradients } from '@/constants/colors';
 import { UI } from '@/constants/ui';
+import GradientText from '@/components/ui/GradientText';
 
 interface TeamTabPlaceholderProps {
   title: string;
@@ -21,7 +22,11 @@ export default function TeamTabPlaceholder({ title, icon }: TeamTabPlaceholderPr
         <View style={styles.iconWrap}>
           <Ionicons name={icon} size={28} color={Colors.primary} />
         </View>
-        <Text style={styles.title}>{title}</Text>
+        <GradientText
+          text={title}
+          style={styles.title}
+          colors={['#118FF3', '#0C5798']}
+        />
         <Text style={styles.subtitle}>This page is coming next.</Text>
       </View>
     </LinearGradient>

@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Gradients } from '@/constants/colors';
 import Button from '@/components/ui/Button';
+import GradientText from '@/components/ui/GradientText';
 
 export default function OnboardingInviteCodeScreen() {
   const { inviteCode, teamName } = useLocalSearchParams<{
@@ -82,7 +83,11 @@ export default function OnboardingInviteCodeScreen() {
 
         {/* Heading */}
         <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.headingSection}>
-          <Text style={styles.title}>Team Created! 🎉</Text>
+          <GradientText
+            text="Team Created! 🎉"
+            style={styles.title}
+            colors={['#FFFFFF', '#D4EBFC']}
+          />
           <Text style={styles.subtitle}>
             Share this code with your players so they can join{teamName ? ` ${teamName}` : ' your team'}
           </Text>

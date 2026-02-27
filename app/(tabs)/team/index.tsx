@@ -17,9 +17,32 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import TeamCard from '@/components/TeamCard';
+import GradientText from '@/components/ui/GradientText';
 import { Colors, Gradients } from '@/constants/colors';
 import { UI } from '@/constants/ui';
 import { TeamWithUserRole, CoachRole } from '@/types/database';
+
+async function withRetry<T>(
+  fn: () => PromiseLike<T>,
+  { retries = 1, timeout = 15000, message = 'Request timed out.' } = {},
+): Promise<T> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const result = await Promise.race([
+        fn(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(message)), timeout),
+        ),
+      ]);
+      return result;
+    } catch (err) {
+      if (attempt === retries) throw err;
+      // Brief pause before retry
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+  throw new Error(message);
+}
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -40,74 +63,111 @@ export default function TeamScreen() {
   const { user, profile, signOut } = useAuth();
   const [teams, setTeams] = useState<TeamWithUserRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const isCoach = profile?.role === 'coach' || profile?.role === 'admin';
 
   const firstName = profile?.first_name ?? profile?.full_name?.split(' ')[0] ?? '';
   const initials = profile?.full_name ? getInitials(profile.full_name) : '?';
 
   const fetchTeams = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      setLoadError('Unable to load teams right now. Please try again.');
+      return;
+    }
     setLoading(true);
+    setLoadError(null);
     try {
+      // Ensure the auth session is fully initialized before querying
+      await supabase.auth.getSession();
       const results: TeamWithUserRole[] = [];
 
       if (isCoach) {
-        const { data, error } = await supabase
-          .from('team_coaches')
-          .select('role, team:teams(id, name, invite_code)')
-          .eq('coach_id', user.id);
+        const { data, error } = await withRetry(
+          () => supabase
+            .from('team_coaches')
+            .select('role, team:teams(id, name, invite_code)')
+            .eq('coach_id', user.id),
+          { message: 'Timed out while loading teams.' },
+        );
 
         if (error) throw error;
 
-        for (const row of data ?? []) {
-          const team = row.team as { id: string; name: string; invite_code: string } | null;
-          if (!team) continue;
+        const rows = (data ?? []).filter(
+          (row) => row.team != null,
+        ) as { role: string; team: { id: string; name: string; invite_code: string } }[];
 
-          const [coachRes, playerRes] = await Promise.all([
-            supabase.from('team_coaches').select('id', { count: 'exact', head: true }).eq('team_id', team.id),
-            supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', team.id),
-          ]);
-          const memberCount = (coachRes.count ?? 0) + (playerRes.count ?? 0);
+        if (rows.length > 0) {
+          const counts = await withRetry(
+            () => Promise.all(
+              rows.map((row) =>
+                Promise.all([
+                  supabase.from('team_coaches').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
+                  supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
+                ]),
+              ),
+            ),
+            { message: 'Timed out while loading team members.' },
+          );
 
-          results.push({
-            teamId: team.id,
-            teamName: team.name,
-            inviteCode: team.invite_code,
-            memberCount,
-            userRole: row.role as CoachRole,
-          });
+          for (let i = 0; i < rows.length; i++) {
+            const { team, role } = rows[i];
+            const [coachRes, playerRes] = counts[i];
+            results.push({
+              teamId: team.id,
+              teamName: team.name,
+              inviteCode: team.invite_code,
+              memberCount: (coachRes.count ?? 0) + (playerRes.count ?? 0),
+              userRole: role as CoachRole,
+            });
+          }
         }
       } else {
-        const { data, error } = await supabase
-          .from('team_players')
-          .select('team:teams(id, name, invite_code)')
-          .eq('player_id', user.id);
+        const { data, error } = await withRetry(
+          () => supabase
+            .from('team_players')
+            .select('team:teams(id, name, invite_code)')
+            .eq('player_id', user.id),
+          { message: 'Timed out while loading teams.' },
+        );
 
         if (error) throw error;
 
-        for (const row of data ?? []) {
-          const team = row.team as { id: string; name: string; invite_code: string } | null;
-          if (!team) continue;
+        const rows = (data ?? []).filter(
+          (row) => row.team != null,
+        ) as { team: { id: string; name: string; invite_code: string } }[];
 
-          const [coachRes, playerRes] = await Promise.all([
-            supabase.from('team_coaches').select('id', { count: 'exact', head: true }).eq('team_id', team.id),
-            supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', team.id),
-          ]);
-          const memberCount = (coachRes.count ?? 0) + (playerRes.count ?? 0);
+        if (rows.length > 0) {
+          const counts = await withRetry(
+            () => Promise.all(
+              rows.map((row) =>
+                Promise.all([
+                  supabase.from('team_coaches').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
+                  supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
+                ]),
+              ),
+            ),
+            { message: 'Timed out while loading team members.' },
+          );
 
-          results.push({
-            teamId: team.id,
-            teamName: team.name,
-            inviteCode: team.invite_code,
-            memberCount,
-            userRole: 'player',
-          });
+          for (let i = 0; i < rows.length; i++) {
+            const { team } = rows[i];
+            const [coachRes, playerRes] = counts[i];
+            results.push({
+              teamId: team.id,
+              teamName: team.name,
+              inviteCode: team.invite_code,
+              memberCount: (coachRes.count ?? 0) + (playerRes.count ?? 0),
+              userRole: 'player',
+            });
+          }
         }
       }
 
       setTeams(results);
     } catch (err) {
       console.error('fetchTeams error:', err);
+      setLoadError(err instanceof Error ? err.message : 'Failed to load teams.');
     } finally {
       setLoading(false);
     }
@@ -161,7 +221,11 @@ export default function TeamScreen() {
           </View>
         </View>
 
-        <Text style={styles.headerTitle}>My Teams</Text>
+        <GradientText
+          text="My Teams"
+          style={styles.headerTitle}
+          colors={['#FFFFFF', '#D4EBFC']}
+        />
 
         {isCoach && (
           <View style={styles.actionRow}>
@@ -191,6 +255,24 @@ export default function TeamScreen() {
           <ActivityIndicator size="large" color="#fff" />
           <Text style={styles.loadingText}>Loading teams...</Text>
         </View>
+      ) : loadError ? (
+        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.emptyState}>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="alert-circle-outline" size={40} color="rgba(255,255,255,0.75)" />
+          </View>
+          <Text style={styles.emptyTitle}>Couldn't load teams</Text>
+          <Text style={styles.emptySubtitle}>{loadError}</Text>
+          <TouchableOpacity
+            style={styles.ctaButton}
+            onPress={fetchTeams}
+            activeOpacity={0.85}
+          >
+            <View style={styles.ctaInner}>
+              <Ionicons name="refresh-outline" size={20} color="#fff" />
+              <Text style={styles.ctaText}>Try Again</Text>
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
       ) : teams.length === 0 ? (
         <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.emptyState}>
           <View style={styles.emptyIcon}>

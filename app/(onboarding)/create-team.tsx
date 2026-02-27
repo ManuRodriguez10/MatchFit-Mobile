@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Gradients } from '@/constants/colors';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import GradientText from '@/components/ui/GradientText';
 
 export default function OnboardingCreateTeamScreen() {
   const { user } = useAuth();
@@ -126,7 +127,11 @@ export default function OnboardingCreateTeamScreen() {
             >
               <Ionicons name="shield-checkmark" size={32} color="#fff" />
             </LinearGradient>
-            <Text style={styles.title}>Create Your Team</Text>
+            <GradientText
+              text="Create Your Team"
+              style={styles.title}
+              colors={['#FFFFFF', '#D4EBFC']}
+            />
             <Text style={styles.subtitle}>
               Give your team a name to get started. You'll get a player invite code next.
             </Text>

@@ -7,6 +7,7 @@ import Animated, { FadeIn, FadeInDown } from '@/utils/reanimated-shim';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Gradients } from '@/constants/colors';
+import GradientText from '@/components/ui/GradientText';
 
 export default function OnboardingWelcomeScreen() {
   const { profile, signOut } = useAuth();
@@ -55,7 +56,11 @@ export default function OnboardingWelcomeScreen() {
 
         {/* Welcome heading */}
         <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.headingSection}>
-          <Text style={styles.welcomeText}>Welcome, Coach 👋</Text>
+          <GradientText
+            text="Welcome, Coach 👋"
+            style={styles.welcomeText}
+            colors={['#FFFFFF', '#D4EBFC']}
+          />
           <Text style={styles.subText}>Let's get you set up</Text>
         </Animated.View>
 
@@ -63,7 +68,11 @@ export default function OnboardingWelcomeScreen() {
         <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.cardContainer}>
           <BlurView intensity={40} tint="light" style={styles.blurContainer}>
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>What would you like to do?</Text>
+              <GradientText
+                text="What would you like to do?"
+                style={styles.cardTitle}
+                colors={['#118FF3', '#0C5798']}
+              />
 
               {/* Option A: Create a New Team */}
               <TouchableOpacity

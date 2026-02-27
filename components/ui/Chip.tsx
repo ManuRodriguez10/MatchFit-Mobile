@@ -5,7 +5,7 @@ import { UI } from '@/constants/ui';
 
 interface ChipProps {
   label: string;
-  tone?: 'default' | 'primary' | 'lavender' | 'mint' | 'cream';
+  tone?: keyof typeof toneStyles;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
 }
@@ -13,28 +13,48 @@ interface ChipProps {
 const toneStyles = {
   default: {
     bg: Colors.surfaceMuted,
-    border: Colors.borderSoft,
+    border: Colors.border,
     text: Colors.textSecondary,
   },
   primary: {
-    bg: Colors.primarySoft,
-    border: '#C7DAFF',
-    text: Colors.primary,
+    bg: Colors.blueSoft,
+    border: '#93C5FD',
+    text: Colors.blue,
   },
   lavender: {
-    bg: '#F1ECFF',
-    border: '#DDD2FF',
-    text: '#6D28D9',
+    bg: Colors.purpleSoft,
+    border: '#C4B5FD',
+    text: Colors.purple,
   },
   mint: {
-    bg: '#EAFBF3',
-    border: '#BBF7D0',
-    text: '#15803D',
+    bg: Colors.emeraldSoft,
+    border: '#6EE7B7',
+    text: '#059669',
   },
   cream: {
-    bg: '#FFF8E1',
+    bg: Colors.amberSoft,
     border: '#FDE68A',
-    text: '#A16207',
+    text: Colors.amber,
+  },
+  red: {
+    bg: Colors.redSoft,
+    border: '#FECACA',
+    text: Colors.red,
+  },
+  emerald: {
+    bg: Colors.emeraldSoft,
+    border: '#6EE7B7',
+    text: Colors.emerald,
+  },
+  amber: {
+    bg: Colors.amberSoft,
+    border: '#FDE68A',
+    text: Colors.amber,
+  },
+  blue: {
+    bg: Colors.blueSoft,
+    border: '#93C5FD',
+    text: Colors.blue,
   },
 } as const;
 

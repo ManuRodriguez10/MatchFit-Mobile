@@ -77,6 +77,35 @@ export interface Rsvp {
   updated_at: string;
 }
 
+export type LineupStatus = 'draft' | 'published';
+
+export interface Lineup {
+  id: string;
+  team_id: string;
+  event_id: string | null;
+  title: string;
+  formation: string;
+  status: LineupStatus;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LineupPlayer {
+  id: string;
+  lineup_id: string;
+  player_id: string;
+  position_key: string;   // e.g. "GK", "CB1", "LB", "ST1"
+  is_starter: boolean;
+  created_at: string;
+}
+
+export interface LineupPlayerWithProfile extends LineupPlayer {
+  profile: Pick<UserProfile, 'id' | 'full_name' | 'email'>;
+  jersey_number: number | null;
+  positions: PlayerPosition[];
+}
+
 // ── Composite types for joined Supabase queries ───────────────
 
 export interface TeamCoachWithProfile {

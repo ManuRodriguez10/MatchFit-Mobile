@@ -6,6 +6,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type TabIconName =
   | 'grid-outline'
@@ -57,6 +58,9 @@ function TeamTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     }).start();
   }, [activeIndex, tabWidth, translateX]);
 
+  const activeOptions = descriptors[state.routes[state.index]?.key]?.options;
+  const tabBarBackground = activeOptions?.tabBarBackground?.();
+
   return (
     <View
       style={[
@@ -65,6 +69,14 @@ function TeamTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
       ]}
     >
       <BlurView intensity={55} tint="dark" style={styles.tabBarBlur} />
+      {tabBarBackground ?? (
+        <LinearGradient
+          colors={['#118FF3', '#0C5798']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.tabBarGradient}
+        />
+      )}
 
       <View style={styles.tabBarInner} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}>
         {tabWidth > 0 ? (
@@ -133,6 +145,14 @@ export default function TeamDetailLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarBackground: () => (
+          <LinearGradient
+            colors={['#118FF3', '#0C5798']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.tabBarGradient}
+          />
+        ),
       }}
       tabBar={(props) => <TeamTabBar {...props} />}
     >
@@ -159,9 +179,9 @@ const styles = StyleSheet.create({
     right: 18,
     borderRadius: 18,
     overflow: 'hidden',
-    backgroundColor: 'rgba(15,23,42,0.66)',
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.25)',
+    borderColor: 'rgba(255,255,255,0.20)',
     shadowColor: '#020617',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
@@ -169,6 +189,9 @@ const styles = StyleSheet.create({
     elevation: 14,
   },
   tabBarBlur: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  tabBarGradient: {
     ...StyleSheet.absoluteFillObject,
   },
   tabBarInner: {
@@ -188,7 +211,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 36,
     borderRadius: 12,
-    backgroundColor: 'rgba(37,99,235,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.20)',
   },
   tabButton: {
     flex: 1,
