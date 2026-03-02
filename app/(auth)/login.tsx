@@ -17,7 +17,9 @@ import Animated, {
 } from '@/utils/reanimated-shim';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { Colors, Gradients } from '@/constants/colors';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
@@ -29,6 +31,9 @@ export default function LoginScreen() {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [generalError, setGeneralError] = useState('');
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
   const { signIn } = useAuth();
 
   const validateEmail = (email: string) => {
@@ -87,6 +92,25 @@ export default function LoginScreen() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setGeneralError('');
+    setEmailError('');
+    if (!validateEmail(email)) return;
+
+    setForgotLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+      if (error) throw error;
+      setForgotSent(true);
+    } catch (error) {
+      setGeneralError(
+        error instanceof Error ? error.message : 'Failed to send reset email. Please try again.'
+      );
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -172,36 +196,71 @@ export default function LoginScreen() {
                     />
                   </Animated.View>
 
-                  {/* Forgot Password — centered */}
-                  <Animated.View entering={FadeInDown.delay(600).springify()} style={styles.forgotPasswordContainer}>
-                    <TouchableOpacity>
-                      <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-                    </TouchableOpacity>
-                  </Animated.View>
+                  {forgotMode ? (
+                    // Forgot password mode
+                    <>
+                      {forgotSent ? (
+                        <View style={styles.forgotSentBox}>
+                          <Ionicons name="checkmark-circle" size={32} color={Colors.emerald} />
+                          <Text style={styles.forgotSentTitle}>Check your email</Text>
+                          <Text style={styles.forgotSentText}>
+                            We sent a password reset link to {email.trim()}
+                          </Text>
+                          <TouchableOpacity onPress={() => { setForgotMode(false); setForgotSent(false); }}>
+                            <Text style={styles.forgotBackLink}>Back to Sign In</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <>
+                          <Animated.View entering={FadeInDown.delay(600).springify()}>
+                            <Button
+                              title="Send Reset Link"
+                              onPress={handleForgotPassword}
+                              loading={forgotLoading}
+                              disabled={forgotLoading}
+                              style={styles.signInButton}
+                            />
+                          </Animated.View>
+                          <Animated.View entering={FadeInDown.delay(700).springify()} style={styles.signUpContainer}>
+                            <TouchableOpacity onPress={() => { setForgotMode(false); setGeneralError(''); }}>
+                              <Text style={styles.forgotBackLink}>Back to Sign In</Text>
+                            </TouchableOpacity>
+                          </Animated.View>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    // Normal login mode
+                    <>
+                      <Animated.View entering={FadeInDown.delay(600).springify()} style={styles.forgotPasswordContainer}>
+                        <TouchableOpacity onPress={() => { setForgotMode(true); setPasswordError(''); setGeneralError(''); }}>
+                          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                        </TouchableOpacity>
+                      </Animated.View>
 
-                  {/* Sign In Button */}
-                  <Animated.View entering={FadeInDown.delay(700).springify()}>
-                    <Button
-                      title="Sign In"
-                      onPress={handleLogin}
-                      loading={loading}
-                      disabled={loading}
-                      style={styles.signInButton}
-                    />
-                  </Animated.View>
+                      <Animated.View entering={FadeInDown.delay(700).springify()}>
+                        <Button
+                          title="Sign In"
+                          onPress={handleLogin}
+                          loading={loading}
+                          disabled={loading}
+                          style={styles.signInButton}
+                        />
+                      </Animated.View>
 
-                  {/* Sign Up Link */}
-                  <Animated.View
-                    entering={FadeInDown.delay(800).springify()}
-                    style={styles.signUpContainer}
-                  >
-                    <Text style={styles.signUpText}>Don't have an account? </Text>
-                    <Link href="/(auth)/signup" asChild>
-                      <TouchableOpacity>
-                        <Text style={styles.signUpLink}>Sign Up</Text>
-                      </TouchableOpacity>
-                    </Link>
-                  </Animated.View>
+                      <Animated.View
+                        entering={FadeInDown.delay(800).springify()}
+                        style={styles.signUpContainer}
+                      >
+                        <Text style={styles.signUpText}>Don't have an account? </Text>
+                        <Link href="/(auth)/signup" asChild>
+                          <TouchableOpacity>
+                            <Text style={styles.signUpLink}>Sign Up</Text>
+                          </TouchableOpacity>
+                        </Link>
+                      </Animated.View>
+                    </>
+                  )}
                 </View>
               </BlurView>
             </Animated.View>
@@ -308,5 +367,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '500',
+  },
+  forgotSentBox: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+  },
+  forgotSentTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  forgotSentText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  forgotBackLink: {
+    color: Colors.primary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 8,
   },
 });

@@ -12,6 +12,8 @@ export default function TeamLayout() {
       <Stack.Screen name="event-detail" options={{ headerShown: false }} />
       <Stack.Screen name="edit-event" options={{ headerShown: false }} />
       <Stack.Screen name="lineup-builder" options={{ headerShown: false }} />
+      <Stack.Screen name="delete-team" options={{ headerShown: false }} />
+      <Stack.Screen name="import-roster" options={{ headerShown: false }} />
       <Stack.Screen
         name="create"
         options={{

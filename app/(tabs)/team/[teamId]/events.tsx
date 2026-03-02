@@ -36,6 +36,8 @@ interface EventItem {
   date: string;
   kickoff_time: string | null;
   recurrence_group_id: string | null;
+  rsvpGoing?: number;
+  rsvpTotal?: number;
 }
 
 const EVENT_COLORS: Record<EventItem['event_type'], string> = {
@@ -148,7 +150,33 @@ export default function TeamEventsScreen() {
           .eq('team_id', teamId)
           .order('date', { ascending: true });
         if (error) console.warn('Events fetch error:', error.message);
-        setEvents((data as EventItem[]) ?? []);
+
+        const eventList = (data ?? []) as EventItem[];
+
+        // Fetch RSVP counts for all events in parallel
+        if (eventList.length > 0) {
+          const eventIds = eventList.map(e => e.id);
+          const { data: rsvpData } = await supabase
+            .from('rsvps')
+            .select('event_id, status')
+            .in('event_id', eventIds);
+
+          if (rsvpData) {
+            const countMap: Record<string, { going: number; total: number }> = {};
+            for (const r of rsvpData as any[]) {
+              if (!countMap[r.event_id]) countMap[r.event_id] = { going: 0, total: 0 };
+              countMap[r.event_id].total++;
+              if (r.status === 'going') countMap[r.event_id].going++;
+            }
+            for (const ev of eventList) {
+              const c = countMap[ev.id];
+              ev.rsvpGoing = c?.going ?? 0;
+              ev.rsvpTotal = c?.total ?? 0;
+            }
+          }
+        }
+
+        setEvents(eventList);
       } finally {
         setLoading(false);
       }
@@ -294,6 +322,14 @@ export default function TeamEventsScreen() {
             <Text style={styles.metaText}>{event.location}</Text>
           </View>
         ) : null}
+        {(event.rsvpTotal ?? 0) > 0 && (
+          <View style={styles.metaRow}>
+            <Ionicons name="people-outline" size={12} color="#64748B" />
+            <Text style={styles.metaText}>
+              {event.rsvpGoing ?? 0} going · {event.rsvpTotal} responded
+            </Text>
+          </View>
+        )}
       </Card>
     </TouchableOpacity>
   );
@@ -390,6 +426,14 @@ export default function TeamEventsScreen() {
             <Text style={styles.metaText}>{event.location}</Text>
           </View>
         ) : null}
+        {(event.rsvpTotal ?? 0) > 0 && (
+          <View style={styles.metaRow}>
+            <Ionicons name="people-outline" size={12} color="#64748B" />
+            <Text style={styles.metaText}>
+              {event.rsvpGoing ?? 0} going · {event.rsvpTotal} responded
+            </Text>
+          </View>
+        )}
       </View>
     </Card>
   );

@@ -106,6 +106,19 @@ export interface LineupPlayerWithProfile extends LineupPlayer {
   positions: PlayerPosition[];
 }
 
+export type CoachInviteRole = 'assistant_coach' | 'head_coach';
+
+export interface CoachInvite {
+  id: string;
+  team_id: string;
+  code: string;
+  created_by: string;
+  expires_at: string;
+  used: boolean;
+  invited_role: CoachInviteRole;
+  created_at: string;
+}
+
 // ── Composite types for joined Supabase queries ───────────────
 
 export interface TeamCoachWithProfile {

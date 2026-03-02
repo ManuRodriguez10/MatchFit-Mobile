@@ -6,9 +6,10 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  Alert,
   Share,
   RefreshControl,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useGlobalSearchParams, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,6 +22,30 @@ import { UI } from '@/constants/ui';
 import Card from '@/components/ui/Card';
 import { showToast } from '@/components/ui/Toast';
 import GradientText from '@/components/ui/GradientText';
+import { CoachInviteRole } from '@/types/database';
+
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function generateCode(length = 6): string {
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += CODE_ALPHABET.charAt(Math.floor(Math.random() * CODE_ALPHABET.length));
+  }
+  return code;
+}
+
+function daysUntil(isoDate: string): number {
+  const now = new Date();
+  const exp = new Date(isoDate);
+  return Math.max(0, Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+interface ActiveCoachInvite {
+  id: string;
+  code: string;
+  expires_at: string;
+  invited_role: CoachInviteRole;
+}
 
 export default function TeamSettingsScreen() {
   const { teamId } = useGlobalSearchParams<{ teamId: string }>();
@@ -31,8 +56,15 @@ export default function TeamSettingsScreen() {
   const [inviteCode, setInviteCode] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState('');
   const [isHeadCoach, setIsHeadCoach] = useState(false);
+
+  // Coach invite state
+  const [coachInvite, setCoachInvite] = useState<ActiveCoachInvite | null>(null);
+  const [coachInviteRole, setCoachInviteRole] = useState<CoachInviteRole>('assistant_coach');
+  const [generatingCode, setGeneratingCode] = useState(false);
+
+  // Coach management state
+  const [coaches, setCoaches] = useState<{ id: string; coach_id: string; role: string; name: string }[]>([]);
 
   const loadTeam = useCallback(async () => {
     if (!teamId) return;
@@ -46,10 +78,43 @@ export default function TeamSettingsScreen() {
       setInviteCode(data.invite_code);
       setIsHeadCoach(data.created_by === user?.id);
     }
+
+    // Always start with no active coach invite — coach must generate a fresh one each session
+    setCoachInvite(null);
+
+    // Load all coaches on this team
+    const { data: coachData } = await supabase
+      .from('team_coaches')
+      .select('id, coach_id, role, profile:profiles!team_coaches_coach_id_fkey(full_name)')
+      .eq('team_id', teamId);
+
+    if (coachData) {
+      setCoaches((coachData as any[]).map(c => ({
+        id: c.id,
+        coach_id: c.coach_id,
+        role: c.role,
+        name: c.profile?.full_name || 'Unknown',
+      })));
+    }
+
     setRefreshing(false);
   }, [teamId, user]);
 
-  useFocusEffect(useCallback(() => { loadTeam(); }, [loadTeam]));
+  useFocusEffect(useCallback(() => {
+    loadTeam();
+    return () => {
+      // Void any unused coach invite when leaving the page
+      if (teamId) {
+        supabase
+          .from('coach_invites')
+          .update({ used: true })
+          .eq('team_id', teamId)
+          .eq('used', false)
+          .then(() => {});
+      }
+      setCoachInvite(null);
+    };
+  }, [loadTeam, teamId]));
 
   const handleSaveTeamName = async () => {
     if (!teamName.trim()) return;
@@ -72,47 +137,134 @@ export default function TeamSettingsScreen() {
   const handleShareCode = async () => {
     try {
       await Share.share({
-        message: `Join ${teamName} on MatchFit! Use invite code: ${inviteCode}`,
+        message: `Join ${teamName} on MatchFit! Use player invite code: ${inviteCode}`,
       });
     } catch {}
   };
 
-  const handleDeleteTeam = () => {
-    if (deleteConfirm !== teamName) {
-      Alert.alert('Confirmation Required', `Type "${teamName}" to confirm deletion.`);
-      return;
-    }
+  const handleGenerateCoachCode = async () => {
+    if (!teamId || !user) return;
+    setGeneratingCode(true);
+    try {
+      // Void all existing unused codes for this team
+      await supabase
+        .from('coach_invites')
+        .update({ used: true })
+        .eq('team_id', teamId)
+        .eq('used', false);
 
+      const code = generateCode();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      const { data, error } = await supabase
+        .from('coach_invites')
+        .insert({
+          team_id: teamId,
+          code,
+          created_by: user.id,
+          expires_at: expiresAt.toISOString(),
+          used: false,
+          invited_role: coachInviteRole,
+        })
+        .select('id, code, expires_at, invited_role')
+        .single();
+
+      if (error) throw error;
+
+      setCoachInvite(data as ActiveCoachInvite);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast('success', 'Coach invite code generated');
+    } catch {
+      showToast('error', 'Failed to generate code');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setGeneratingCode(false);
+    }
+  };
+
+  const handleCopyCoachCode = async () => {
+    if (!coachInvite) return;
+    try {
+      await Share.share({ message: coachInvite.code });
+    } catch {}
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleShareCoachCode = async () => {
+    if (!coachInvite) return;
+    const roleLabel = coachInvite.invited_role === 'head_coach' ? 'Head Coach' : 'Assistant Coach';
+    try {
+      await Share.share({
+        message: `Join ${teamName} on MatchFit as ${roleLabel}! Use coach invite code: ${coachInvite.code} (expires in ${daysUntil(coachInvite.expires_at)} days)`,
+      });
+    } catch {}
+  };
+
+  const handleTransferOwnership = (targetCoach: { id: string; coach_id: string; name: string }) => {
     Alert.alert(
-      'Delete Team',
-      'This action cannot be undone. All team data will be permanently deleted.',
+      'Transfer Ownership',
+      `Make ${targetCoach.name} the new head coach? You will become an assistant coach.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete Forever',
+          text: 'Transfer',
           style: 'destructive',
           onPress: async () => {
             try {
-              // Delete related data first
-              await supabase.from('lineup_players').delete().in(
-                'lineup_id',
-                (await supabase.from('lineups').select('id').eq('team_id', teamId)).data?.map((l: any) => l.id) || []
-              );
-              await supabase.from('lineups').delete().eq('team_id', teamId);
-              await supabase.from('events').delete().eq('team_id', teamId);
-              await supabase.from('team_players').delete().eq('team_id', teamId);
-              await supabase.from('team_coaches').delete().eq('team_id', teamId);
-              await supabase.from('teams').delete().eq('id', teamId);
+              // Demote current head coach to assistant
+              await supabase
+                .from('team_coaches')
+                .update({ role: 'assistant_coach' })
+                .eq('team_id', teamId)
+                .eq('coach_id', user!.id);
 
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              showToast('success', 'Team deleted');
-              router.replace('/(tabs)/team');
+              // Promote target to head coach
+              await supabase
+                .from('team_coaches')
+                .update({ role: 'head_coach' })
+                .eq('id', targetCoach.id);
+
+              // Update teams.created_by
+              await supabase
+                .from('teams')
+                .update({ created_by: targetCoach.coach_id })
+                .eq('id', teamId);
+
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showToast('success', `${targetCoach.name} is now head coach`);
+              setIsHeadCoach(false);
+              loadTeam();
             } catch {
-              showToast('error', 'Failed to delete team');
+              showToast('error', 'Failed to transfer ownership');
             }
           },
         },
-      ],
+      ]
+    );
+  };
+
+  const handleRemoveCoach = (coach: { id: string; name: string }) => {
+    Alert.alert(
+      'Remove Coach',
+      `Remove ${coach.name} from the coaching staff?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.from('team_coaches').delete().eq('id', coach.id);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showToast('success', `${coach.name} removed`);
+              loadTeam();
+            } catch {
+              showToast('error', 'Failed to remove coach');
+            }
+          },
+        },
+      ]
     );
   };
 
@@ -210,6 +362,190 @@ export default function TeamSettingsScreen() {
           </TouchableOpacity>
         </Card>
 
+        {/* Invite Coaches */}
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIconWrap, { backgroundColor: Colors.purpleSoft }]}>
+              <Ionicons name="shield-outline" size={18} color={Colors.purple} />
+            </View>
+            <GradientText
+              text="Invite Coaches"
+              style={styles.cardTitle}
+              colors={['#118FF3', '#0C5798']}
+            />
+          </View>
+
+          {isHeadCoach ? (
+            <>
+              {coachInvite ? (
+                // Active code display
+                <View style={styles.coachInviteActive}>
+                  <View style={styles.coachRoleBadge}>
+                    <Text style={styles.coachRoleBadgeText}>
+                      Invited as: {coachInvite.invited_role === 'head_coach' ? 'Head Coach' : 'Assistant Coach'}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity onPress={handleCopyCoachCode} style={styles.codeDisplay} activeOpacity={0.7}>
+                    <Text style={styles.codeText}>{coachInvite.code}</Text>
+                    <Ionicons name="copy-outline" size={18} color={Colors.primary} />
+                  </TouchableOpacity>
+
+                  <Text style={styles.coachCodeExpiry}>
+                    Expires in {daysUntil(coachInvite.expires_at)} days — One-time use only
+                  </Text>
+
+                  <TouchableOpacity onPress={handleShareCoachCode} style={styles.shareBtn} activeOpacity={0.8}>
+                    <Ionicons name="share-social-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.shareBtnText}>Share Coach Code</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleGenerateCoachCode}
+                    style={styles.regenerateBtn}
+                    activeOpacity={0.8}
+                    disabled={generatingCode}
+                  >
+                    {generatingCode ? (
+                      <ActivityIndicator size="small" color={Colors.textSecondary} />
+                    ) : (
+                      <>
+                        <Ionicons name="refresh-outline" size={16} color={Colors.textSecondary} />
+                        <Text style={styles.regenerateBtnText}>Generate New Code</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                // No active code — generate one
+                <View style={styles.coachInviteEmpty}>
+                  <Text style={styles.fieldLabel}>Select the role for the invited coach</Text>
+
+                  <View style={styles.rolePicker}>
+                    <TouchableOpacity
+                      style={[
+                        styles.roleOption,
+                        coachInviteRole === 'assistant_coach' && styles.roleOptionActive,
+                      ]}
+                      onPress={() => setCoachInviteRole('assistant_coach')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={coachInviteRole === 'assistant_coach' ? 'radio-button-on' : 'radio-button-off'}
+                        size={18}
+                        color={coachInviteRole === 'assistant_coach' ? Colors.primary : Colors.textMuted}
+                      />
+                      <Text style={[
+                        styles.roleOptionText,
+                        coachInviteRole === 'assistant_coach' && styles.roleOptionTextActive,
+                      ]}>
+                        Assistant Coach
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.roleOption,
+                        coachInviteRole === 'head_coach' && styles.roleOptionActive,
+                      ]}
+                      onPress={() => setCoachInviteRole('head_coach')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={coachInviteRole === 'head_coach' ? 'radio-button-on' : 'radio-button-off'}
+                        size={18}
+                        color={coachInviteRole === 'head_coach' ? Colors.primary : Colors.textMuted}
+                      />
+                      <Text style={[
+                        styles.roleOptionText,
+                        coachInviteRole === 'head_coach' && styles.roleOptionTextActive,
+                      ]}>
+                        Head Coach
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={handleGenerateCoachCode}
+                    style={styles.generateBtn}
+                    activeOpacity={0.8}
+                    disabled={generatingCode}
+                  >
+                    {generatingCode ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="key-outline" size={16} color="#fff" />
+                        <Text style={styles.generateBtnText}>Generate One-Time Code</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
+          ) : (
+            // Non-head-coach locked state
+            <View style={styles.lockedState}>
+              <Ionicons name="lock-closed-outline" size={24} color={Colors.textMuted} />
+              <Text style={styles.lockedText}>
+                Only the head coach can generate coach invite codes.
+              </Text>
+            </View>
+          )}
+        </Card>
+
+        {/* Manage Coaches */}
+        {isHeadCoach && coaches.length > 1 && (
+          <Card style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.cardIconWrap, { backgroundColor: Colors.blueSoft }]}>
+                <Ionicons name="people-circle-outline" size={18} color={Colors.primary} />
+              </View>
+              <GradientText
+                text="Manage Coaches"
+                style={styles.cardTitle}
+                colors={['#118FF3', '#0C5798']}
+              />
+            </View>
+
+            {coaches
+              .filter(c => c.coach_id !== user?.id)
+              .map(coach => (
+                <View key={coach.id} style={styles.coachRow}>
+                  <View style={styles.coachRowLeft}>
+                    <View style={styles.coachInitialsCircle}>
+                      <Text style={styles.coachInitialsText}>
+                        {coach.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.coachRowName} numberOfLines={1}>{coach.name}</Text>
+                      <Text style={styles.coachRowRole}>
+                        {coach.role === 'head_coach' ? 'Head Coach' : 'Assistant Coach'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.coachRowActions}>
+                    <TouchableOpacity
+                      onPress={() => handleTransferOwnership(coach)}
+                      style={styles.coachActionBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="swap-horizontal-outline" size={16} color={Colors.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleRemoveCoach(coach)}
+                      style={styles.coachActionBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="person-remove-outline" size={16} color={Colors.red} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+          </Card>
+        )}
+
         {/* Danger Zone */}
         {isHeadCoach && (
           <Card style={[styles.card, styles.dangerCard]}>
@@ -224,18 +560,9 @@ export default function TeamSettingsScreen() {
               Deleting this team will permanently remove all team data, including events, lineups, and player associations.
             </Text>
 
-            <Text style={styles.fieldLabel}>Type "{teamName}" to confirm</Text>
-            <TextInput
-              style={[styles.input, styles.dangerInput]}
-              value={deleteConfirm}
-              onChangeText={setDeleteConfirm}
-              placeholder={teamName}
-              placeholderTextColor={Colors.textMuted}
-            />
-
             <TouchableOpacity
-              onPress={handleDeleteTeam}
-              style={[styles.deleteBtn, deleteConfirm !== teamName && styles.deleteBtnDisabled]}
+              onPress={() => router.push({ pathname: '/team/delete-team', params: { teamId, teamName } })}
+              style={styles.deleteBtn}
               activeOpacity={0.8}
             >
               <Ionicons name="trash-outline" size={16} color="#fff" />
@@ -314,17 +641,96 @@ const styles = StyleSheet.create({
   },
   shareBtnText: { fontSize: 14, color: Colors.primary, fontFamily: UI.typography.semibold },
 
+  // Coach invite
+  coachInviteActive: { gap: 10 },
+  coachInviteEmpty: { gap: 12 },
+  coachRoleBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.emeraldSoft,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: UI.radius.pill,
+  },
+  coachRoleBadgeText: {
+    fontSize: 12, color: Colors.emerald, fontFamily: UI.typography.bold,
+  },
+  coachCodeExpiry: {
+    fontSize: 12, color: Colors.textMuted, fontFamily: UI.typography.medium, textAlign: 'center',
+  },
+  rolePicker: { gap: 8 },
+  roleOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 12, paddingHorizontal: 14,
+    borderRadius: UI.radius.lg,
+    backgroundColor: Colors.surfaceMuted,
+    borderWidth: 1.5, borderColor: 'transparent',
+  },
+  roleOptionActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.blueSoft,
+  },
+  roleOptionText: {
+    fontSize: 15, color: Colors.textSecondary, fontFamily: UI.typography.medium,
+  },
+  roleOptionTextActive: {
+    color: Colors.primary, fontFamily: UI.typography.bold,
+  },
+  generateBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 14, borderRadius: UI.radius.lg,
+    backgroundColor: Colors.primary,
+  },
+  generateBtnText: { color: '#fff', fontSize: 14, fontFamily: UI.typography.bold },
+  regenerateBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, borderRadius: UI.radius.lg,
+    backgroundColor: Colors.surfaceMuted,
+    borderWidth: 1, borderColor: Colors.borderSoft,
+  },
+  regenerateBtnText: { fontSize: 13, color: Colors.textSecondary, fontFamily: UI.typography.medium },
+  lockedState: {
+    alignItems: 'center', gap: 8, paddingVertical: 16,
+  },
+  lockedText: {
+    fontSize: 13, color: Colors.textMuted, fontFamily: UI.typography.medium, textAlign: 'center',
+  },
+
+  // Manage coaches
+  coachRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.borderSoft,
+  },
+  coachRowLeft: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1,
+  },
+  coachInitialsCircle: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: Colors.blueSoft, alignItems: 'center', justifyContent: 'center',
+  },
+  coachInitialsText: {
+    fontSize: 13, fontFamily: UI.typography.bold, color: Colors.primary,
+  },
+  coachRowName: {
+    fontSize: 15, fontFamily: UI.typography.semibold, color: Colors.textPrimary,
+  },
+  coachRowRole: {
+    fontSize: 12, fontFamily: UI.typography.medium, color: Colors.textMuted,
+  },
+  coachRowActions: {
+    flexDirection: 'row', gap: 8,
+  },
+  coachActionBtn: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: Colors.surfaceMuted, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: Colors.borderSoft,
+  },
+
   // Danger zone
   dangerCard: { borderWidth: 1, borderColor: '#FECACA' },
   dangerText: { fontSize: 13, color: Colors.textSecondary, fontFamily: UI.typography.regular, lineHeight: 19 },
-  dangerInput: {
-    borderColor: '#FECACA', backgroundColor: Colors.redSoft,
-  },
   deleteBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 12, borderRadius: UI.radius.lg,
     backgroundColor: Colors.red,
   },
-  deleteBtnDisabled: { opacity: 0.4 },
   deleteBtnText: { color: '#fff', fontSize: 14, fontFamily: UI.typography.bold },
 });

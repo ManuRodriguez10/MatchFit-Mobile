@@ -51,6 +51,57 @@ export default function OnboardingJoinTeamScreen() {
     setGeneralError('');
 
     try {
+      const cleanedCode = inviteCode.trim().toUpperCase();
+      const now = new Date().toISOString();
+
+      // 1. Check coach_invites first (one-time coach codes)
+      const { data: coachInvite } = await supabase
+        .from('coach_invites')
+        .select('id, team_id, invited_role')
+        .eq('code', cleanedCode)
+        .eq('used', false)
+        .gt('expires_at', now)
+        .limit(1)
+        .maybeSingle();
+
+      if (coachInvite) {
+        // Coach invite code found — join with the specified role
+        const { data: existingCoach } = await supabase
+          .from('team_coaches')
+          .select('id')
+          .eq('team_id', coachInvite.team_id)
+          .eq('coach_id', user!.id)
+          .maybeSingle();
+
+        if (existingCoach) {
+          setGeneralError("You're already a coach on this team.");
+          return;
+        }
+
+        const coachRole = coachInvite.invited_role === 'head_coach' ? 'head_coach' : 'assistant_coach';
+
+        const { error: joinError } = await supabase
+          .from('team_coaches')
+          .insert({
+            team_id: coachInvite.team_id,
+            coach_id: user!.id,
+            role: coachRole,
+          });
+
+        if (joinError) throw joinError;
+
+        // Mark invite as used
+        await supabase
+          .from('coach_invites')
+          .update({ used: true })
+          .eq('id', coachInvite.id);
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await completeOnboarding();
+        return;
+      }
+
+      // 2. Fall back to team player invite code
       const lookup = await lookupTeamByInviteCode(inviteCode);
       if (!lookup.ok) {
         if (lookup.reason === 'invalid_code') {
@@ -58,7 +109,6 @@ export default function OnboardingJoinTeamScreen() {
         } else {
           setGeneralError(lookup.message ?? 'Unable to validate team code. Please try again.');
         }
-        console.error('Invite code lookup failed:', lookup);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
@@ -71,14 +121,14 @@ export default function OnboardingJoinTeamScreen() {
         .select('id')
         .eq('team_id', team.id)
         .eq('coach_id', user!.id)
-        .single();
+        .maybeSingle();
 
       if (existingCoach) {
         setGeneralError("You're already a coach on this team.");
         return;
       }
 
-      // Join as assistant coach
+      // Join as assistant coach (fallback — player code used by a coach)
       const { error: joinError } = await supabase
         .from('team_coaches')
         .insert({
@@ -90,10 +140,7 @@ export default function OnboardingJoinTeamScreen() {
       if (joinError) throw joinError;
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Mark onboarding complete — assistant coaches skip the invite code step
       await completeOnboarding();
-      // Root layout will auto-redirect to /(tabs) once profile updates
     } catch (error) {
       setGeneralError(
         error instanceof Error ? error.message : 'Failed to join team. Please try again.'
@@ -148,7 +195,7 @@ export default function OnboardingJoinTeamScreen() {
               colors={['#FFFFFF', '#D4EBFC']}
             />
             <Text style={styles.subtitle}>
-              Enter the 6-character code shared by a head coach to join as assistant coach
+              Enter the 6-character invite code shared by a head coach
             </Text>
           </Animated.View>
 

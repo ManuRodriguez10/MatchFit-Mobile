@@ -147,7 +147,7 @@ export default function RosterScreen() {
   const [positionFilter, setPositionFilter] = useState<PositionFilter>('all');
 
   const fetchData = useCallback(async () => {
-    if (!teamId) return;
+    if (!teamId) { setLoading(false); return; }
     try {
       const [teamResult, coachResult, playerResult] = await Promise.all([
         supabase.from('teams').select('id, name, invite_code').eq('id', teamId).single(),
@@ -246,9 +246,18 @@ export default function RosterScreen() {
           colors={['#FFFFFF', '#D4EBFC']}
         />
         {isCoach ? (
-          <TouchableOpacity style={styles.headerBtn} onPress={handleShare} activeOpacity={0.8}>
-            <Ionicons name="share-social-outline" size={20} color="#fff" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              style={styles.headerBtn}
+              onPress={() => router.push({ pathname: '/team/import-roster', params: { teamId: teamId! } })}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="cloud-upload-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerBtn} onPress={handleShare} activeOpacity={0.8}>
+              <Ionicons name="share-social-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
         ) : (
           <View style={styles.headerBtnGhost} />
         )}

@@ -689,6 +689,9 @@ export default function EditEventScreen() {
                 onPress={handleSave}
                 loading={saving}
                 disabled={saving || deleting}
+                variant="secondary"
+                style={styles.saveBtn}
+                textStyle={styles.saveBtnText}
               />
             </View>
 
@@ -700,10 +703,10 @@ export default function EditEventScreen() {
               disabled={saving || deleting}
             >
               {deleting ? (
-                <ActivityIndicator size="small" color={Colors.error} />
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
-                  <Ionicons name="trash-outline" size={18} color={Colors.error} />
+                  <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
                   <Text style={styles.deleteBtnText}>Delete Event</Text>
                 </>
               )}
@@ -1075,6 +1078,13 @@ const styles = StyleSheet.create({
   submitButtonWrap: {
     marginTop: 28,
   },
+  saveBtn: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
+  },
+  saveBtnText: {
+    color: Colors.primary,
+  },
 
   // Delete button
   deleteBtn: {
@@ -1085,14 +1095,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 22,
     borderRadius: UI.radius.xl,
-    borderWidth: 1.5,
-    borderColor: 'rgba(239, 68, 68, 0.4)',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: '#DC2626',
+    backgroundColor: '#DC2626',
     marginTop: 12,
     minHeight: 52,
   },
   deleteBtnText: {
-    color: Colors.error,
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
   },

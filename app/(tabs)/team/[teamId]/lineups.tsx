@@ -9,7 +9,7 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useGlobalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -50,7 +50,9 @@ function formatDate(isoDate: string) {
 }
 
 export default function TeamLineupsScreen() {
-  const { teamId } = useLocalSearchParams<{ teamId: string }>();
+  const localParams = useLocalSearchParams<{ teamId?: string }>();
+  const globalParams = useGlobalSearchParams<{ teamId?: string }>();
+  const teamId = (globalParams.teamId ?? localParams.teamId ?? '').toString();
   const router = useRouter();
   const { profile } = useAuth();
   const isCoach = profile?.role === 'coach';
@@ -61,7 +63,11 @@ export default function TeamLineupsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!teamId) return;
+    if (!teamId) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       const today = new Date().toISOString().slice(0, 10);
 
@@ -216,12 +222,7 @@ export default function TeamLineupsScreen() {
           <>
             {/* Upcoming Games — create lineup for a game */}
             {isCoach && gamesWithoutLineup.length > 0 && (
-              <Card
-                padded={false}
-                showTopAccent
-                topAccentColors={[Colors.emerald, Colors.emeraldDark]}
-                style={styles.panel}
-              >
+              <Card padded={false} style={styles.panel}>
                 <View style={styles.panelHeader}>
                   <View style={styles.panelHeaderLeft}>
                     <View style={[styles.panelIconWrap, { backgroundColor: Colors.emeraldSoft }]}>
@@ -276,12 +277,7 @@ export default function TeamLineupsScreen() {
 
             {/* No games at all — empty state */}
             {isCoach && upcomingGames.length === 0 && lineups.length === 0 && (
-              <Card
-                padded={false}
-                showTopAccent
-                topAccentColors={[Colors.primary, Colors.primaryDark]}
-                style={styles.panel}
-              >
+              <Card padded={false} style={styles.panel}>
                 <EmptyState
                   icon="calendar-outline"
                   title="No games scheduled"
@@ -302,12 +298,7 @@ export default function TeamLineupsScreen() {
 
             {/* Existing Lineups list */}
             {lineups.length > 0 && (
-              <Card
-                padded={false}
-                showTopAccent
-                topAccentColors={[Colors.purple, Colors.purpleDark]}
-                style={styles.panel}
-              >
+              <Card padded={false} style={styles.panel}>
                 <View style={styles.panelHeader}>
                   <Text style={styles.panelTitle}>All Lineups</Text>
                 </View>
@@ -355,12 +346,7 @@ export default function TeamLineupsScreen() {
 
             {/* Player empty state */}
             {!isCoach && lineups.length === 0 && (
-              <Card
-                padded={false}
-                showTopAccent
-                topAccentColors={[Colors.primary, Colors.primaryDark]}
-                style={styles.panel}
-              >
+              <Card padded={false} style={styles.panel}>
                 <EmptyState
                   icon="football-outline"
                   title="No lineups yet"

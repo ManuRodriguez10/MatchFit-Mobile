@@ -85,7 +85,7 @@ export default function TeamDashboardScreen() {
   );
 
   const load = useCallback(async () => {
-    if (!teamId) return;
+    if (!teamId) { setLoading(false); return; }
     setError(null);
     try {
       const [teamRes, playersRes, eventsCountRes, eventsRes, lineupsCountRes, lineupsRes] = await Promise.all([

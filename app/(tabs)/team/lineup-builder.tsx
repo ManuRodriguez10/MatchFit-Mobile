@@ -18,7 +18,7 @@ import { UI } from '@/constants/ui';
 import { getFormation, DEFAULT_FORMATION } from '@/constants/formations';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { TeamPlayerWithProfile } from '@/types/database';
+import { TeamPlayerWithProfile, PlayerPosition } from '@/types/database';
 import PitchView from '@/components/lineup/PitchView';
 import FormationPicker from '@/components/lineup/FormationPicker';
 import PlayerSelector from '@/components/lineup/PlayerSelector';
@@ -38,6 +38,7 @@ interface PlayerAssignment {
   playerId: string;
   playerName: string;
   jerseyNumber: number | null;
+  positions?: PlayerPosition[];
 }
 
 export default function LineupBuilderScreen() {
@@ -140,6 +141,7 @@ export default function LineupBuilderScreen() {
                 playerId: lp.player_id,
                 playerName: lp.profiles?.full_name || 'Unknown',
                 jerseyNumber: rosterEntry?.jersey_number ?? null,
+                positions: rosterEntry?.positions,
               };
 
               if (lp.is_starter && lp.position_key) {
@@ -200,6 +202,7 @@ export default function LineupBuilderScreen() {
       playerId: player.profile.id,
       playerName: player.profile.full_name,
       jerseyNumber: player.jersey_number,
+      positions: player.positions,
     };
 
     if (selectingForSubs) {
@@ -321,12 +324,13 @@ export default function LineupBuilderScreen() {
   };
 
   // Build pitch players map
-  const pitchPlayers: Record<string, { positionKey: string; playerName: string; jerseyNumber: number | null }> = {};
+  const pitchPlayers: Record<string, { positionKey: string; playerName: string; jerseyNumber: number | null; positions?: PlayerPosition[] }> = {};
   for (const [key, a] of Object.entries(assignments)) {
     pitchPlayers[key] = {
       positionKey: key,
       playerName: a.playerName,
       jerseyNumber: a.jerseyNumber,
+      positions: a.positions,
     };
   }
 
