@@ -62,8 +62,9 @@ export default function LineupBuilderScreen() {
   const [selectedPositionKey, setSelectedPositionKey] = useState('');
   const [selectingForSubs, setSelectingForSubs] = useState(false);
   const [eventTitle, setEventTitle] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  const isEditing = !!lineupId;
+  const isEditing = !!lineupId && lineupId.length > 0;
   const formationData = getFormation(formation);
 
   // Get all assigned player IDs (starters + subs)
@@ -75,7 +76,7 @@ export default function LineupBuilderScreen() {
   // Load roster and optionally existing lineup
   useEffect(() => {
     loadData();
-  }, [teamId]);
+  }, [teamId, lineupId]);
 
   const loadData = async () => {
     try {
@@ -112,12 +113,16 @@ export default function LineupBuilderScreen() {
       }
 
       // If editing, load existing lineup
-      if (lineupId) {
+      if (lineupId && lineupId.length > 0) {
+        console.log('[LineupBuilder] Loading lineup with ID:', lineupId);
         const { data: lineupData, error: lineupError } = await supabase
           .from('lineups')
           .select('*')
           .eq('id', lineupId)
           .single();
+
+        console.log('[LineupBuilder] Lineup data:', JSON.stringify(lineupData));
+        console.log('[LineupBuilder] Lineup error:', lineupError);
 
         if (lineupError) throw lineupError;
 
@@ -126,10 +131,14 @@ export default function LineupBuilderScreen() {
           setTitle(lineupData.title || '');
 
           // Load lineup players
-          const { data: lpData } = await supabase
+          const { data: lpData, error: lpError } = await supabase
             .from('lineup_players')
             .select('*, profiles:player_id(id, full_name, email)')
             .eq('lineup_id', lineupId);
+
+          console.log('[LineupBuilder] Lineup players count:', lpData?.length);
+          console.log('[LineupBuilder] Lineup players error:', lpError);
+          console.log('[LineupBuilder] Lineup players data:', JSON.stringify(lpData));
 
           if (lpData) {
             const starterAssignments: Record<string, PlayerAssignment> = {};
@@ -178,6 +187,7 @@ export default function LineupBuilderScreen() {
             style: 'destructive',
             onPress: () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setHasUnsavedChanges(true);
               setAssignments(prev => {
                 const next = { ...prev };
                 delete next[positionKey];
@@ -205,6 +215,7 @@ export default function LineupBuilderScreen() {
       positions: player.positions,
     };
 
+    setHasUnsavedChanges(true);
     if (selectingForSubs) {
       setSubstitutes(prev => [...prev, assignment]);
     } else {
@@ -230,7 +241,55 @@ export default function LineupBuilderScreen() {
           style: 'destructive',
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setHasUnsavedChanges(true);
             setSubstitutes(prev => prev.filter((_, i) => i !== index));
+          },
+        },
+      ],
+    );
+  };
+
+  const handleBack = () => {
+    if (hasUnsavedChanges) {
+      Alert.alert(
+        'Unsaved Changes',
+        'You have unsaved changes. Would you like to save your draft before leaving?',
+        [
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => router.back(),
+          },
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Save Draft',
+            onPress: () => handleSave('draft'),
+          },
+        ],
+      );
+    } else {
+      router.back();
+    }
+  };
+
+  const handleClearLineup = () => {
+    const starterCount = Object.keys(assignments).length;
+    const subCount = substitutes.length;
+    if (starterCount === 0 && subCount === 0) return;
+
+    Alert.alert(
+      'Clear Lineup',
+      `Remove all ${starterCount} starter${starterCount !== 1 ? 's' : ''} and ${subCount} sub${subCount !== 1 ? 's' : ''}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setAssignments({});
+            setSubstitutes([]);
+            setHasUnsavedChanges(true);
           },
         },
       ],
@@ -308,6 +367,7 @@ export default function LineupBuilderScreen() {
         if (playersError) throw playersError;
       }
 
+      setHasUnsavedChanges(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast(
         'success',
@@ -358,7 +418,7 @@ export default function LineupBuilderScreen() {
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
@@ -374,9 +434,55 @@ export default function LineupBuilderScreen() {
         <View style={{ width: 36 }} />
       </View>
 
+      {/* Action buttons - pinned at top */}
+      <View style={styles.actionsWrapper}>
+        <View style={styles.actions}>
+          <TouchableOpacity
+            onPress={() => handleSave('draft')}
+            disabled={saving}
+            style={styles.draftBtn}
+            activeOpacity={0.8}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={Colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="document-text-outline" size={18} color={Colors.primary} />
+                <Text style={styles.draftBtnText}>Save Draft</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleClearLineup}
+            style={styles.clearActionBtn}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="trash-outline" size={18} color={Colors.red} />
+            <Text style={styles.clearBtnText}>Clear</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => handleSave('published')}
+          disabled={saving}
+          style={styles.publishBtn}
+          activeOpacity={0.8}
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={18} color="#fff" />
+              <Text style={styles.publishBtnText}>Publish</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
       >
         {/* Formation Picker */}
         <Text style={styles.sectionLabel}>Formation</Text>
@@ -384,6 +490,7 @@ export default function LineupBuilderScreen() {
           selected={formation}
           onSelect={(f) => {
             setFormation(f);
+            setHasUnsavedChanges(true);
             // Clear assignments that don't exist in new formation
             const newPositions = new Set(getFormation(f).positions.map(p => p.key));
             setAssignments(prev => {
@@ -453,47 +560,6 @@ export default function LineupBuilderScreen() {
           )}
         </View>
 
-        {/* Action buttons */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            onPress={() => handleSave('draft')}
-            disabled={saving}
-            style={styles.draftBtn}
-            activeOpacity={0.8}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color={Colors.primary} />
-            ) : (
-              <>
-                <Ionicons name="document-text-outline" size={18} color={Colors.primary} />
-                <Text style={styles.draftBtnText}>Save Draft</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => handleSave('published')}
-            disabled={saving}
-            style={styles.publishBtn}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={Gradients.primary as unknown as string[]}
-              style={styles.publishGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                  <Text style={styles.publishBtnText}>Publish</Text>
-                </>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
 
       {/* Player Selector Modal */}
@@ -661,9 +727,14 @@ const styles = StyleSheet.create({
     fontFamily: UI.typography.medium,
     color: Colors.textPrimary,
   },
+  actionsWrapper: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 16,
+    gap: 8,
+  },
   actions: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
     gap: 12,
   },
   draftBtn: {
@@ -672,7 +743,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 14,
+    paddingVertical: 10,
     borderRadius: UI.radius.xl,
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -684,18 +755,33 @@ const styles = StyleSheet.create({
     fontFamily: UI.typography.semibold,
     color: Colors.primary,
   },
-  publishBtn: {
+  clearActionBtn: {
     flex: 1,
-    borderRadius: UI.radius.xl,
-    overflow: 'hidden',
-    ...UI.shadow.soft,
-  },
-  publishGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 14,
+    paddingVertical: 10,
+    borderRadius: UI.radius.xl,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...UI.shadow.soft,
+  },
+  clearBtnText: {
+    fontSize: 15,
+    fontFamily: UI.typography.semibold,
+    color: Colors.red,
+  },
+  publishBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: UI.radius.xl,
+    backgroundColor: '#34C759',
+    ...UI.shadow.soft,
   },
   publishBtnText: {
     fontSize: 15,

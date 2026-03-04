@@ -89,14 +89,27 @@ function RootLayoutNav() {
 
             const coachTeam = coachTeams?.[0];
             if (coachTeam?.team_id) {
-              // Already has a team — skip to invite-code screen
-              router.replace({
-                pathname: '/(onboarding)/invite-code',
-                params: {
-                  inviteCode: (coachTeam as any).teams?.invite_code ?? '',
-                  teamName: (coachTeam as any).teams?.name ?? 'Your Team',
-                },
-              });
+              const hasCoachContactInfo = !!(profile.phone && profile.nationality);
+              if (hasCoachContactInfo) {
+                // Already has required contact details — continue to invite step.
+                router.replace({
+                  pathname: '/(onboarding)/invite-code',
+                  params: {
+                    inviteCode: (coachTeam as any).teams?.invite_code ?? '',
+                    teamName: (coachTeam as any).teams?.name ?? 'Your Team',
+                  },
+                });
+              } else {
+                // Collect coach contact details before finishing onboarding.
+                router.replace({
+                  pathname: '/(onboarding)/coach-profile',
+                  params: {
+                    teamId: coachTeam.team_id,
+                    inviteCode: (coachTeam as any).teams?.invite_code ?? '',
+                    teamName: (coachTeam as any).teams?.name ?? 'Your Team',
+                  },
+                });
+              }
             } else {
               router.replace('/(onboarding)');
             }

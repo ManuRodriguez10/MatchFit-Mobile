@@ -50,6 +50,21 @@ function formatDate(isoDate: string) {
   });
 }
 
+function getCurrentWeekRange(): { start: string; end: string } {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun, 1=Mon...
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMon);
+  monday.setHours(0, 0, 0, 0);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return {
+    start: monday.toISOString().slice(0, 10),
+    end: sunday.toISOString().slice(0, 10),
+  };
+}
+
 function formatKickoffTime(kickoffTime: string | null) {
   if (!kickoffTime) return 'TBD';
   const parsed = new Date(kickoffTime);
@@ -139,13 +154,13 @@ export default function TeamLineupsScreen() {
         .gte('date', today)
         .order('date', { ascending: true });
 
-      const lineupEventIds = new Set(
-        (lineupData || []).map((l: any) => l.event_id).filter(Boolean)
+      const publishedEventIds = new Set(
+        (lineupData || []).filter((l: any) => l.status === 'published').map((l: any) => l.event_id).filter(Boolean)
       );
 
       const games: UpcomingGame[] = (gamesData || []).map((g: any) => ({
         ...g,
-        hasLineup: lineupEventIds.has(g.id),
+        hasLineup: publishedEventIds.has(g.id),
       }));
 
       setUpcomingGames(games);
@@ -231,11 +246,26 @@ export default function TeamLineupsScreen() {
     } catch {}
   };
 
-  const publishedCount = lineups.filter(l => l.status === 'published').length;
-  const draftCount = lineups.filter(l => l.status === 'draft').length;
-  const upcomingGamesCount = upcomingGames.length;
-  const gamesWithoutLineup = upcomingGames.filter(g => !g.hasLineup);
-  const latestPublishedLineup = lineups.find((l) => l.status === 'published') ?? null;
+  const publishedLineups = lineups.filter(l => l.status === 'published');
+  const draftLineups = lineups.filter(l => l.status === 'draft');
+  const publishedCount = publishedLineups.length;
+  const draftCount = draftLineups.length;
+
+  // Games with a draft lineup saved
+  const draftEventIds = new Set(draftLineups.map(l => l.event_id).filter(Boolean));
+  const gamesWithDraft = upcomingGames.filter(g => draftEventIds.has(g.id));
+  // Games with no lineup at all
+  const gamesWithoutLineup = upcomingGames.filter(g => !g.hasLineup && !draftEventIds.has(g.id));
+
+  const latestPublishedLineup = publishedLineups[0] ?? null;
+
+  // Weekly status
+  const { start: weekStart, end: weekEnd } = getCurrentWeekRange();
+  const thisWeekGames = upcomingGames.filter(g => g.date >= weekStart && g.date <= weekEnd);
+  const thisWeekPublishedIds = new Set(
+    publishedLineups.filter(l => l.eventDate && l.eventDate >= weekStart && l.eventDate <= weekEnd).map(l => l.event_id)
+  );
+  const thisWeekUnpublished = thisWeekGames.filter(g => !thisWeekPublishedIds.has(g.id));
 
   return (
     <LinearGradient
@@ -312,13 +342,29 @@ export default function TeamLineupsScreen() {
           </LinearGradient>
         )}
 
+        {/* Weekly status banner */}
+        {!loading && isCoach && thisWeekGames.length > 0 && (
+          <View style={[styles.allSetBanner, thisWeekUnpublished.length > 0 && styles.weekWarningBanner]}>
+            <Ionicons
+              name={thisWeekUnpublished.length === 0 ? "checkmark-circle" : "alert-circle"}
+              size={18}
+              color={thisWeekUnpublished.length === 0 ? Colors.emerald : Colors.amber}
+            />
+            <Text style={styles.allSetText}>
+              {thisWeekUnpublished.length === 0
+                ? 'All lineups published this week'
+                : `${thisWeekUnpublished.length} game${thisWeekUnpublished.length > 1 ? 's' : ''} this week still need${thisWeekUnpublished.length === 1 ? 's' : ''} a published lineup`}
+            </Text>
+          </View>
+        )}
+
         {loading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator size="large" color="#fff" />
           </View>
         ) : (
           <>
-            {/* Upcoming Games — create lineup for a game */}
+            {/* Section 1: Create Lineup — games with no lineup at all */}
             {isCoach && gamesWithoutLineup.length > 0 && (
               <Card padded={false} style={styles.panel}>
                 <View style={styles.panelHeader}>
@@ -328,7 +374,7 @@ export default function TeamLineupsScreen() {
                     </View>
                     <View>
                       <Text style={styles.panelTitle}>Create Lineup</Text>
-                      <Text style={styles.panelSubtitle}>Select a game to build a lineup for</Text>
+                      <Text style={styles.panelSubtitle}>Games that need a lineup</Text>
                     </View>
                   </View>
                 </View>
@@ -356,19 +402,85 @@ export default function TeamLineupsScreen() {
                           <Text style={styles.gameTitle} numberOfLines={1}>{displayTitle}</Text>
                           <View style={styles.gameMeta}>
                             <Ionicons name="calendar-outline" size={12} color={Colors.textMuted} />
-                            <Text style={styles.gameMetaText}>Date: {formatDate(game.date)}</Text>
+                            <Text style={styles.gameMetaText}>{formatDate(game.date)}</Text>
                           </View>
                           <View style={styles.gameMeta}>
                             <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
-                            <Text style={styles.gameMetaText}>
-                              Time: {formatKickoffTime(game.kickoff_time)}
-                            </Text>
+                            <Text style={styles.gameMetaText}>{formatKickoffTime(game.kickoff_time)}</Text>
                           </View>
                         </View>
                       </View>
                       <View style={styles.createChip}>
                         <Ionicons name="add" size={14} color={Colors.primary} />
                         <Text style={styles.createChipText}>Create</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </Card>
+            )}
+
+            {/* Section 2: Drafts — games with a saved draft lineup */}
+            {isCoach && gamesWithDraft.length > 0 && (
+              <Card padded={false} style={styles.panel}>
+                <View style={styles.panelHeader}>
+                  <View style={styles.panelHeaderLeft}>
+                    <View style={[styles.panelIconWrap, { backgroundColor: Colors.blueSoft }]}>
+                      <Ionicons name="document-text-outline" size={16} color={Colors.primary} />
+                    </View>
+                    <View>
+                      <Text style={styles.panelTitle}>Drafts</Text>
+                      <Text style={styles.panelSubtitle}>Lineups in progress</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {gamesWithDraft.map(game => {
+                  const displayTitle = game.title || (game.opponent ? `vs ${game.opponent}` : 'Game');
+                  const draft = draftLineups.find(l => l.event_id === game.id);
+                  return (
+                    <TouchableOpacity
+                      key={game.id}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        router.push({
+                          pathname: '/team/lineup-builder',
+                          params: {
+                            teamId,
+                            eventId: game.id,
+                            ...(draft && { lineupId: draft.id }),
+                          },
+                        });
+                      }}
+                      onLongPress={() => {
+                        if (draft) handleDelete(draft);
+                      }}
+                      activeOpacity={0.7}
+                      style={styles.gameCard}
+                    >
+                      <View style={styles.gameLeft}>
+                        <View style={styles.gameIconWrap}>
+                          <Ionicons name="football-outline" size={18} color={Colors.red} />
+                        </View>
+                        <View style={styles.gameInfo}>
+                          <Text style={styles.gameTitle} numberOfLines={1}>{displayTitle}</Text>
+                          <View style={styles.gameMeta}>
+                            <Ionicons name="calendar-outline" size={12} color={Colors.textMuted} />
+                            <Text style={styles.gameMetaText}>{formatDate(game.date)}</Text>
+                          </View>
+                          {draft && (
+                            <View style={styles.gameMeta}>
+                              <Ionicons name="people-outline" size={12} color={Colors.textMuted} />
+                              <Text style={styles.gameMetaText}>
+                                {draft.starterCount}/11 starters · {draft.formation}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                      <View style={styles.draftChip}>
+                        <Ionicons name="pencil" size={14} color={Colors.amber} />
+                        <Text style={styles.draftChipText}>Edit</Text>
                       </View>
                     </TouchableOpacity>
                   );
@@ -389,22 +501,24 @@ export default function TeamLineupsScreen() {
               </Card>
             )}
 
-            {/* All games have lineups — info message */}
-            {isCoach && upcomingGames.length > 0 && gamesWithoutLineup.length === 0 && lineups.length > 0 && (
-              <View style={styles.allSetBanner}>
-                <Ionicons name="checkmark-circle" size={18} color={Colors.emerald} />
-                <Text style={styles.allSetText}>All upcoming games have lineups</Text>
-              </View>
-            )}
 
-            {/* Existing Lineups list */}
-            {lineups.length > 0 && (
+
+            {/* Section 3: Published Lineups */}
+            {publishedLineups.length > 0 && (
               <Card padded={false} style={styles.panel}>
                 <View style={styles.panelHeader}>
-                  <Text style={styles.panelTitle}>All Lineups</Text>
+                  <View style={styles.panelHeaderLeft}>
+                    <View style={[styles.panelIconWrap, { backgroundColor: Colors.emeraldSoft }]}>
+                      <Ionicons name="checkmark-circle-outline" size={16} color={Colors.emerald} />
+                    </View>
+                    <View>
+                      <Text style={styles.panelTitle}>Published</Text>
+                      <Text style={styles.panelSubtitle}>Visible to players</Text>
+                    </View>
+                  </View>
                 </View>
 
-                {lineups.map(lineup => (
+                {publishedLineups.map(lineup => (
                   <TouchableOpacity
                     key={lineup.id}
                     onPress={() => {
@@ -423,10 +537,7 @@ export default function TeamLineupsScreen() {
                   >
                     <View style={styles.lineupTop}>
                       <Text style={styles.lineupTitle} numberOfLines={1}>{lineup.title}</Text>
-                      <Chip
-                        label={lineup.status === 'published' ? 'Published' : 'Draft'}
-                        tone={lineup.status === 'published' ? 'mint' : 'lavender'}
-                      />
+                      <Chip label="Published" tone="mint" />
                     </View>
                     {lineup.eventTitle && (
                       <View style={styles.lineupEventRow}>
@@ -442,16 +553,6 @@ export default function TeamLineupsScreen() {
                     </Text>
                     {isCoach && (
                       <View style={styles.lineupActions}>
-                        {lineup.status === 'draft' && (
-                          <TouchableOpacity
-                            style={styles.lineupActionBtn}
-                            activeOpacity={0.7}
-                            onPress={() => handleQuickPublish(lineup)}
-                          >
-                            <Ionicons name="checkmark-circle-outline" size={14} color={Colors.emerald} />
-                            <Text style={[styles.lineupActionText, { color: Colors.emerald }]}>Publish</Text>
-                          </TouchableOpacity>
-                        )}
                         <TouchableOpacity
                           style={styles.lineupActionBtn}
                           activeOpacity={0.7}
@@ -607,6 +708,14 @@ const styles = StyleSheet.create({
   createChipText: {
     fontSize: 12, color: Colors.primary, fontFamily: UI.typography.bold,
   },
+  draftChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: UI.radius.pill,
+    backgroundColor: Colors.amberSoft,
+  },
+  draftChipText: {
+    fontSize: 12, color: Colors.amber, fontFamily: UI.typography.bold,
+  },
 
   // All set banner
   allSetBanner: {
@@ -615,7 +724,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12, marginTop: 4,
   },
   allSetText: {
-    fontSize: 14, color: '#fff', fontFamily: UI.typography.medium,
+    fontSize: 14, color: '#fff', fontFamily: UI.typography.medium, flex: 1,
+  },
+  weekWarningBanner: {
+    backgroundColor: 'rgba(217, 119, 6, 0.2)',
   },
 
   // Lineup cards

@@ -74,10 +74,10 @@ export default function OnboardingCreateTeamScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // Navigate to invite code screen (replace so back doesn't loop)
+      // Continue onboarding with coach details before showing invite code
       router.replace({
-        pathname: '/(onboarding)/invite-code',
-        params: { inviteCode: team.invite_code, teamName: teamName.trim() },
+        pathname: '/(onboarding)/coach-profile',
+        params: { teamId: team.id, inviteCode: team.invite_code, teamName: teamName.trim() },
       });
     } catch (error) {
       setGeneralError(

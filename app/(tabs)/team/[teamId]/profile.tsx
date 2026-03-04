@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Alert,
   RefreshControl,
-  Switch,
   Linking,
   TextInput,
   KeyboardAvoidingView,
@@ -187,21 +186,24 @@ export default function TeamProfileScreen() {
       const heightIn = editHeightIn ? parseInt(editHeightIn, 10) : null;
       const weightLbs = editWeight ? parseInt(editWeight, 10) : null;
       const nameParts = editFullName.trim().split(' ').filter(Boolean);
+      const profileUpdates: Record<string, any> = {
+        full_name: editFullName.trim(),
+        first_name: nameParts[0] || null,
+        last_name: nameParts.length > 1 ? nameParts.slice(1).join(' ') : null,
+        phone: editPhone.trim() || null,
+        nationality: editNationality.trim() || null,
+        height_ft: heightFt,
+        height_in: heightIn,
+        weight_lbs: weightLbs,
+      };
+      if (!isCoach) {
+        profileUpdates.date_of_birth = editDob.trim() || null;
+      }
 
       // Update profiles table
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({
-          full_name: editFullName.trim(),
-          first_name: nameParts[0] || null,
-          last_name: nameParts.length > 1 ? nameParts.slice(1).join(' ') : null,
-          phone: editPhone.trim() || null,
-          date_of_birth: editDob.trim() || null,
-          nationality: editNationality.trim() || null,
-          height_ft: heightFt,
-          height_in: heightIn,
-          weight_lbs: weightLbs,
-        })
+        .update(profileUpdates)
         .eq('id', user.id);
 
       if (profileError) throw profileError;
@@ -256,6 +258,16 @@ export default function TeamProfileScreen() {
     ? `${profile.height_ft}'${profile.height_in}"`
     : null;
 
+  const renderInlineToggle = (value: boolean, setValue: (v: boolean) => void) => (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => setValue(!value)}
+      style={[styles.inlineToggleTrack, value && styles.inlineToggleTrackActive]}
+    >
+      <View style={[styles.inlineToggleThumb, value && styles.inlineToggleThumbActive]} />
+    </TouchableOpacity>
+  );
+
   return (
     <LinearGradient
       colors={Gradients.primary as unknown as string[]}
@@ -293,7 +305,11 @@ export default function TeamProfileScreen() {
               colors={['#FFFFFF', '#D4EBFC']}
             />
             {teamRole && (
-              <Chip label={teamRole} tone={isCoach ? 'blue' : 'emerald'} />
+              <Chip
+                label={teamRole}
+                tone={isCoach ? 'blue' : 'emerald'}
+                style={styles.teamRoleChip}
+              />
             )}
             {!isCoach && positions.length > 0 && (
               <View style={styles.positionRow}>
@@ -360,14 +376,16 @@ export default function TeamProfileScreen() {
               placeholder="Phone number"
               keyboardType="phone-pad"
             />
-            <EditableInfoRow
-              icon="calendar-outline"
-              label="Date of Birth"
-              value={editing ? editDob : (profile?.date_of_birth || '')}
-              editing={editing}
-              onChangeText={setEditDob}
-              placeholder="YYYY-MM-DD"
-            />
+            {!isCoach && (
+              <EditableInfoRow
+                icon="calendar-outline"
+                label="Date of Birth"
+                value={editing ? editDob : (profile?.date_of_birth || '')}
+                editing={editing}
+                onChangeText={setEditDob}
+                placeholder="YYYY-MM-DD"
+              />
+            )}
             <EditableInfoRow
               icon="flag-outline"
               label="Nationality"
@@ -473,55 +491,40 @@ export default function TeamProfileScreen() {
             <Card padded={false} style={[styles.card, styles.notifCard]}>
               <Text style={styles.cardTitle}>Notification Preferences</Text>
 
-              <View style={styles.infoRow}>
+              <View style={styles.notifRow}>
                 <View style={[styles.infoIconWrap, { backgroundColor: Colors.blueSoft }]}>
                   <Ionicons name="notifications-outline" size={16} color={Colors.primary} />
                 </View>
                 <View style={styles.infoContent}>
                   <Text style={styles.infoValue}>Push Notifications</Text>
                 </View>
-                <Switch
-                  style={{ flexShrink: 0, transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
-                  value={pushEnabled}
-                  onValueChange={setPushEnabled}
-                  trackColor={{ false: Colors.borderSoft, true: Colors.emeraldSoft }}
-                  thumbColor={pushEnabled ? Colors.emerald : Colors.textMuted}
-                  ios_backgroundColor={Colors.borderSoft}
-                />
+                <View style={styles.notifSwitchWrap}>
+                  {renderInlineToggle(pushEnabled, setPushEnabled)}
+                </View>
               </View>
 
-              <View style={styles.infoRow}>
+              <View style={styles.notifRow}>
                 <View style={[styles.infoIconWrap, { backgroundColor: Colors.amberSoft }]}>
                   <Ionicons name="alarm-outline" size={16} color={Colors.amber} />
                 </View>
                 <View style={styles.infoContent}>
                   <Text style={styles.infoValue}>Event Reminders</Text>
                 </View>
-                <Switch
-                  style={{ flexShrink: 0, transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
-                  value={eventReminders}
-                  onValueChange={setEventReminders}
-                  trackColor={{ false: Colors.borderSoft, true: Colors.emeraldSoft }}
-                  thumbColor={eventReminders ? Colors.emerald : Colors.textMuted}
-                  ios_backgroundColor={Colors.borderSoft}
-                />
+                <View style={styles.notifSwitchWrap}>
+                  {renderInlineToggle(eventReminders, setEventReminders)}
+                </View>
               </View>
 
-              <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
+              <View style={[styles.notifRow, { borderBottomWidth: 0 }]}>
                 <View style={[styles.infoIconWrap, { backgroundColor: Colors.emeraldSoft }]}>
                   <Ionicons name="clipboard-outline" size={16} color={Colors.emerald} />
                 </View>
                 <View style={styles.infoContent}>
                   <Text style={styles.infoValue}>Lineup Published</Text>
                 </View>
-                <Switch
-                  style={{ flexShrink: 0, transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
-                  value={lineupNotifications}
-                  onValueChange={setLineupNotifications}
-                  trackColor={{ false: Colors.borderSoft, true: Colors.emeraldSoft }}
-                  thumbColor={lineupNotifications ? Colors.emerald : Colors.textMuted}
-                  ios_backgroundColor={Colors.borderSoft}
-                />
+                <View style={styles.notifSwitchWrap}>
+                  {renderInlineToggle(lineupNotifications, setLineupNotifications)}
+                </View>
               </View>
             </Card>
           )}
@@ -595,6 +598,7 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 28, color: Colors.primary, fontFamily: UI.typography.bold },
   name: { fontSize: 24, color: '#fff', fontFamily: UI.typography.bold },
+  teamRoleChip: { alignSelf: 'center' },
   positionRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   posChip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
@@ -654,6 +658,51 @@ const styles = StyleSheet.create({
     fontSize: 15, color: Colors.textPrimary, fontFamily: UI.typography.semibold,
     marginTop: 1, paddingVertical: 2, paddingHorizontal: 0,
     borderBottomWidth: 1, borderBottomColor: Colors.primary,
+  },
+  notifRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingRight: 84,
+    position: 'relative',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderSoft,
+  },
+  notifSwitchWrap: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    width: 54,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  inlineToggleTrack: {
+    width: 46,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.borderSoft,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  inlineToggleTrackActive: {
+    backgroundColor: Colors.emeraldSoft,
+    borderColor: '#A7F3D0',
+  },
+  inlineToggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  inlineToggleThumbActive: {
+    alignSelf: 'flex-end',
+    borderColor: '#6EE7B7',
   },
 
   // Stats grid (read-only mode)

@@ -24,7 +24,7 @@ import Button from '@/components/ui/Button';
 import GradientText from '@/components/ui/GradientText';
 
 export default function OnboardingJoinTeamScreen() {
-  const { user, completeOnboarding } = useAuth();
+  const { user } = useAuth();
   const [inviteCode, setInviteCode] = useState('');
   const [codeError, setCodeError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -97,7 +97,10 @@ export default function OnboardingJoinTeamScreen() {
           .eq('id', coachInvite.id);
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        await completeOnboarding();
+        router.replace({
+          pathname: '/(onboarding)/coach-profile',
+          params: { teamId: coachInvite.team_id },
+        });
         return;
       }
 
@@ -140,7 +143,10 @@ export default function OnboardingJoinTeamScreen() {
       if (joinError) throw joinError;
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await completeOnboarding();
+      router.replace({
+        pathname: '/(onboarding)/coach-profile',
+        params: { teamId: team.id, teamName: team.name },
+      });
     } catch (error) {
       setGeneralError(
         error instanceof Error ? error.message : 'Failed to join team. Please try again.'
