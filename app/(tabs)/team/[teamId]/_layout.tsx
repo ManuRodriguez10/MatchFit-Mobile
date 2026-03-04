@@ -35,10 +35,13 @@ function TeamTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const translateX = useRef(new Animated.Value(0)).current;
 
   const visibleRoutes = useMemo(
-    () => state.routes.filter(
-      (r) => r.name !== 'TeamTabPlaceholder'
-    ),
-    [state.routes]
+    () => state.routes.filter((r) => {
+      if (r.name === 'TeamTabPlaceholder') return false;
+      const options = descriptors[r.key]?.options;
+      if (options && 'href' in options && options.href === null) return false;
+      return true;
+    }),
+    [state.routes, descriptors]
   );
 
   const tabWidth = barWidth > 0 ? barWidth / Math.max(visibleRoutes.length, 1) : 0;

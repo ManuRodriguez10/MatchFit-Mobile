@@ -10,6 +10,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { useGlobalSearchParams, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -268,13 +269,113 @@ export default function TeamSettingsScreen() {
     );
   };
 
+  // Player notification state
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [eventReminders, setEventReminders] = useState(true);
+  const [lineupNotifications, setLineupNotifications] = useState(true);
+  const renderInlineToggle = (value: boolean, onToggle: (next: boolean) => void) => (
+    <TouchableOpacity
+      onPress={() => onToggle(!value)}
+      activeOpacity={0.8}
+      style={[styles.inlineToggleTrack, value && styles.inlineToggleTrackActive]}
+    >
+      <View style={[styles.inlineToggleThumb, value && styles.inlineToggleThumbActive]} />
+    </TouchableOpacity>
+  );
+
   if (!isCoach) {
     return (
-      <LinearGradient colors={Gradients.primary as unknown as string[]} style={styles.gradient}>
-        <View style={styles.centerState}>
-          <Ionicons name="lock-closed-outline" size={48} color="rgba(255,255,255,0.6)" />
-          <Text style={styles.centerText}>Only coaches can access team settings.</Text>
-        </View>
+      <LinearGradient
+        colors={Gradients.primary as unknown as string[]}
+        style={styles.gradient}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+      >
+        <View style={styles.decorCircle1} />
+        <View style={styles.decorCircle2} />
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+        >
+          <GradientText
+            text="Settings"
+            style={styles.title}
+            colors={['#FFFFFF', '#D4EBFC']}
+          />
+          <Text style={styles.subtitle}>Preferences and support</Text>
+
+          {/* Notification Preferences */}
+          <View style={styles.playerCard}>
+            <Text style={styles.playerSectionTitle}>Notification Preferences</Text>
+
+            <View style={styles.playerRow}>
+              <View style={styles.playerRowMain}>
+                <View style={[styles.playerIconWrap, { backgroundColor: Colors.blueSoft }]}>
+                  <Ionicons name="notifications-outline" size={16} color={Colors.primary} />
+                </View>
+                <Text style={styles.playerRowText}>Push Notifications</Text>
+              </View>
+              <View style={styles.playerSwitchWrap}>
+                {renderInlineToggle(pushEnabled, setPushEnabled)}
+              </View>
+            </View>
+
+            <View style={styles.playerRow}>
+              <View style={styles.playerRowMain}>
+                <View style={[styles.playerIconWrap, { backgroundColor: Colors.amberSoft }]}>
+                  <Ionicons name="alarm-outline" size={16} color={Colors.amber} />
+                </View>
+                <Text style={styles.playerRowText}>Event Reminders</Text>
+              </View>
+              <View style={styles.playerSwitchWrap}>
+                {renderInlineToggle(eventReminders, setEventReminders)}
+              </View>
+            </View>
+
+            <View style={[styles.playerRow, { borderBottomWidth: 0 }]}>
+              <View style={styles.playerRowMain}>
+                <View style={[styles.playerIconWrap, { backgroundColor: Colors.emeraldSoft }]}>
+                  <Ionicons name="clipboard-outline" size={16} color={Colors.emerald} />
+                </View>
+                <Text style={styles.playerRowText}>Lineup Published</Text>
+              </View>
+              <View style={styles.playerSwitchWrap}>
+                {renderInlineToggle(lineupNotifications, setLineupNotifications)}
+              </View>
+            </View>
+          </View>
+
+          {/* Help & Support */}
+          <Card style={styles.card}>
+            <Text style={styles.playerSectionTitle}>Help & Support</Text>
+
+            <TouchableOpacity
+              style={styles.playerRow}
+              activeOpacity={0.7}
+              onPress={() => Linking.openURL('https://matchfit.app/faq')}
+            >
+              <View style={[styles.playerIconWrap, { backgroundColor: Colors.emeraldSoft }]}>
+                <Ionicons name="help-circle-outline" size={16} color={Colors.emerald} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.playerRowLabel}>FAQ</Text>
+                <Text style={styles.playerRowText}>Frequently Asked Questions</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            </TouchableOpacity>
+
+            <View style={[styles.playerRow, { borderBottomWidth: 0 }]}>
+              <View style={[styles.playerIconWrap, { backgroundColor: Colors.purpleSoft }]}>
+                <Ionicons name="information-circle-outline" size={16} color={Colors.purple} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.playerRowLabel}>App Version</Text>
+                <Text style={styles.playerRowText}>1.0.0</Text>
+              </View>
+            </View>
+          </Card>
+        </ScrollView>
       </LinearGradient>
     );
   }
@@ -722,6 +823,81 @@ const styles = StyleSheet.create({
     width: 34, height: 34, borderRadius: 10,
     backgroundColor: Colors.surfaceMuted, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: Colors.borderSoft,
+  },
+
+  // Player settings
+  playerCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderSoft,
+    borderRadius: 20,
+    padding: 18,
+    gap: 2,
+    overflow: 'hidden',
+  },
+  playerSectionTitle: {
+    fontSize: 17, color: Colors.textPrimary, fontFamily: UI.typography.bold, marginBottom: 8,
+  },
+  playerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingRight: 84,
+    position: 'relative',
+    borderBottomWidth: 1, borderBottomColor: Colors.borderSoft,
+  },
+  playerRowMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  playerIconWrap: {
+    width: 34, height: 34, borderRadius: 11, flexShrink: 0,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  playerRowText: {
+    fontSize: 15, color: Colors.textPrimary, fontFamily: UI.typography.semibold, marginTop: 1,
+  },
+  playerSwitchWrap: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    width: 54,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  inlineToggleTrack: {
+    width: 46,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.borderSoft,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  inlineToggleTrackActive: {
+    backgroundColor: Colors.emeraldSoft,
+    borderColor: '#A7F3D0',
+  },
+  inlineToggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  inlineToggleThumbActive: {
+    alignSelf: 'flex-end',
+    borderColor: '#6EE7B7',
+  },
+  playerRowLabel: {
+    fontSize: 12, color: Colors.textMuted, fontFamily: UI.typography.medium,
   },
 
   // Danger zone

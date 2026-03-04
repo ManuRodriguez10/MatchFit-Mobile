@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Share,
 } from 'react-native';
 import { useLocalSearchParams, useGlobalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -49,6 +50,16 @@ function formatDate(isoDate: string) {
   });
 }
 
+function formatKickoffTime(kickoffTime: string | null) {
+  if (!kickoffTime) return 'TBD';
+  const parsed = new Date(kickoffTime);
+  if (Number.isNaN(parsed.getTime())) return kickoffTime;
+  return parsed.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export default function TeamLineupsScreen() {
   const localParams = useLocalSearchParams<{ teamId?: string }>();
   const globalParams = useGlobalSearchParams<{ teamId?: string }>();
@@ -72,10 +83,16 @@ export default function TeamLineupsScreen() {
       const today = new Date().toISOString().slice(0, 10);
 
       // Fetch lineups with event info
-      const { data: lineupData, error: lineupError } = await supabase
+      let lineupQuery = supabase
         .from('lineups')
         .select('*, events:event_id(title, opponent, date, event_type)')
-        .eq('team_id', teamId)
+        .eq('team_id', teamId);
+
+      if (!isCoach) {
+        lineupQuery = lineupQuery.eq('status', 'published');
+      }
+
+      const { data: lineupData, error: lineupError } = await lineupQuery
         .order('updated_at', { ascending: false });
 
       if (lineupError) throw lineupError;
@@ -139,7 +156,7 @@ export default function TeamLineupsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [teamId]);
+  }, [teamId, isCoach]);
 
   useFocusEffect(
     useCallback(() => { fetchData(); }, [fetchData]),
@@ -170,9 +187,55 @@ export default function TeamLineupsScreen() {
     );
   };
 
+  const handleQuickPublish = (lineup: LineupWithCounts) => {
+    if (lineup.starterCount < 11) {
+      Alert.alert(
+        'Incomplete Lineup',
+        `You have ${lineup.starterCount}/11 starters assigned. Fill all positions before publishing.`,
+      );
+      return;
+    }
+    Alert.alert(
+      'Publish Lineup',
+      `Publish "${lineup.title}"? Players will be able to see it.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Publish',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('lineups')
+                .update({ status: 'published' })
+                .eq('id', lineup.id);
+              if (error) throw error;
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showToast('success', 'Lineup published');
+              fetchData();
+            } catch {
+              showToast('error', 'Failed to publish');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleShare = async (lineup: LineupWithCounts) => {
+    const eventInfo = lineup.eventTitle ? ` for ${lineup.eventTitle}` : '';
+    const dateInfo = lineup.eventDate ? ` on ${formatDate(lineup.eventDate)}` : '';
+    try {
+      await Share.share({
+        message: `Lineup: ${lineup.title}${eventInfo}${dateInfo}\nFormation: ${lineup.formation}\n${lineup.starterCount} starters, ${lineup.subCount} subs`,
+      });
+    } catch {}
+  };
+
   const publishedCount = lineups.filter(l => l.status === 'published').length;
   const draftCount = lineups.filter(l => l.status === 'draft').length;
+  const upcomingGamesCount = upcomingGames.length;
   const gamesWithoutLineup = upcomingGames.filter(g => !g.hasLineup);
+  const latestPublishedLineup = lineups.find((l) => l.status === 'published') ?? null;
 
   return (
     <LinearGradient
@@ -196,23 +259,58 @@ export default function TeamLineupsScreen() {
           style={styles.title}
           colors={['#FFFFFF', '#D4EBFC']}
         />
-        <Text style={styles.subtitle}>Manage starting elevens and match plans</Text>
+        <Text style={styles.subtitle}>
+          {isCoach ? 'Manage starting elevens and match plans' : 'View published lineups and match plans'}
+        </Text>
 
-        {/* Stat cards */}
-        <View style={styles.statRow}>
-          <StatCard
-            icon="checkmark-circle-outline"
-            value={publishedCount}
-            label="Published"
-            gradient={Gradients.statPurple}
-          />
-          <StatCard
-            icon="document-text-outline"
-            value={draftCount}
-            label="Drafts"
-            gradient={Gradients.statBlue}
-          />
-        </View>
+        {isCoach ? (
+          <View style={styles.statRow}>
+            <StatCard
+              icon="checkmark-circle-outline"
+              value={publishedCount}
+              label="Published"
+              gradient={Gradients.statPurple}
+            />
+            <StatCard
+              icon="document-text-outline"
+              value={draftCount}
+              label="Drafts"
+              gradient={Gradients.statBlue}
+            />
+          </View>
+        ) : (
+          <LinearGradient
+            colors={['rgba(168, 85, 247, 0.92)', 'rgba(124, 58, 237, 0.9)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.latestPublishedCard}
+          >
+            <View style={styles.latestPublishedHeader}>
+              <View style={styles.latestPublishedIconWrap}>
+                <Ionicons name="sparkles-outline" size={16} color="#FFFFFF" />
+              </View>
+              <Text style={styles.latestPublishedTitle}>Latest Published</Text>
+            </View>
+            {loading ? (
+              <Text style={styles.latestPublishedText}>Loading latest lineup...</Text>
+            ) : latestPublishedLineup ? (
+              <>
+                <Text style={styles.latestPublishedGame} numberOfLines={1}>
+                  {latestPublishedLineup.eventTitle || latestPublishedLineup.title || 'Published lineup'}
+                </Text>
+                <Text style={styles.latestPublishedText}>
+                  {latestPublishedLineup.eventDate
+                    ? `Published for ${formatDate(latestPublishedLineup.eventDate)}`
+                    : 'Latest lineup published for this team'}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.latestPublishedText}>
+                No lineup has been published for this team yet.
+              </Text>
+            )}
+          </LinearGradient>
+        )}
 
         {loading ? (
           <View style={styles.loadingRow}>
@@ -258,9 +356,12 @@ export default function TeamLineupsScreen() {
                           <Text style={styles.gameTitle} numberOfLines={1}>{displayTitle}</Text>
                           <View style={styles.gameMeta}>
                             <Ionicons name="calendar-outline" size={12} color={Colors.textMuted} />
+                            <Text style={styles.gameMetaText}>Date: {formatDate(game.date)}</Text>
+                          </View>
+                          <View style={styles.gameMeta}>
+                            <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
                             <Text style={styles.gameMetaText}>
-                              {formatDate(game.date)}
-                              {game.kickoff_time ? ` at ${game.kickoff_time}` : ''}
+                              Time: {formatKickoffTime(game.kickoff_time)}
                             </Text>
                           </View>
                         </View>
@@ -339,6 +440,28 @@ export default function TeamLineupsScreen() {
                     <Text style={styles.lineupMeta}>
                       Formation: {lineup.formation} · {lineup.starterCount} starters · {lineup.subCount} subs
                     </Text>
+                    {isCoach && (
+                      <View style={styles.lineupActions}>
+                        {lineup.status === 'draft' && (
+                          <TouchableOpacity
+                            style={styles.lineupActionBtn}
+                            activeOpacity={0.7}
+                            onPress={() => handleQuickPublish(lineup)}
+                          >
+                            <Ionicons name="checkmark-circle-outline" size={14} color={Colors.emerald} />
+                            <Text style={[styles.lineupActionText, { color: Colors.emerald }]}>Publish</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={styles.lineupActionBtn}
+                          activeOpacity={0.7}
+                          onPress={() => handleShare(lineup)}
+                        >
+                          <Ionicons name="share-outline" size={14} color={Colors.primary} />
+                          <Text style={[styles.lineupActionText, { color: Colors.primary }]}>Share</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 ))}
               </Card>
@@ -382,6 +505,51 @@ const styles = StyleSheet.create({
   },
   statRow: {
     flexDirection: 'row', gap: 12, marginTop: 4,
+  },
+  latestPublishedCard: {
+    borderRadius: 20,
+    padding: 16,
+    gap: 10,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+    shadowColor: '#6D28D9',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.24,
+    shadowRadius: 16,
+    elevation: 7,
+  },
+  latestPublishedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  latestPublishedIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.32)',
+  },
+  latestPublishedTitle: {
+    fontSize: 16,
+    color: '#F5F3FF',
+    fontFamily: UI.typography.bold,
+  },
+  latestPublishedGame: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontFamily: UI.typography.bold,
+    marginTop: 2,
+  },
+  latestPublishedText: {
+    fontSize: 13,
+    color: 'rgba(243, 232, 255, 0.92)',
+    fontFamily: UI.typography.medium,
+    lineHeight: 18,
   },
   loadingRow: {
     paddingVertical: 40, alignItems: 'center',
@@ -469,5 +637,17 @@ const styles = StyleSheet.create({
   },
   lineupMeta: {
     color: Colors.textMuted, fontSize: 12, fontFamily: UI.typography.medium, marginTop: 2,
+  },
+  lineupActions: {
+    flexDirection: 'row', gap: 8, marginTop: 8, paddingTop: 8,
+    borderTopWidth: 1, borderTopColor: Colors.borderSoft,
+  },
+  lineupActionBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: UI.radius.pill,
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderSoft,
+  },
+  lineupActionText: {
+    fontSize: 12, fontFamily: UI.typography.bold,
   },
 });

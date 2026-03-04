@@ -441,6 +441,9 @@ export default function EventDetailScreen() {
           <View style={styles.editBtnWrap}>
             <Button
               title="Edit Event"
+              variant="secondary"
+              style={styles.editBtn}
+              textStyle={styles.editBtnText}
               onPress={() =>
                 router.push({
                   pathname: '/team/edit-event',
@@ -559,4 +562,11 @@ const styles = StyleSheet.create({
   },
 
   editBtnWrap: { marginTop: 4 },
+  editBtn: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
+  },
+  editBtnText: {
+    color: Colors.primary,
+  },
 });

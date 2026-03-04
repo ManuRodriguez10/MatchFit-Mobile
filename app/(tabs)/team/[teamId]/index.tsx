@@ -35,11 +35,30 @@ interface EventSummary {
   kickoff_time: string | null;
 }
 
+interface MyLineup {
+  id: string;
+  title: string;
+  formation: string;
+  position_key: string;
+  is_starter: boolean;
+  event_date: string | null;
+}
+
 function formatDate(isoDate: string) {
   return new Date(`${isoDate}T00:00:00`).toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+  });
+}
+
+function formatKickoffTime(kickoffTime: string | null) {
+  if (!kickoffTime) return 'TBD';
+  const parsed = new Date(kickoffTime);
+  if (Number.isNaN(parsed.getTime())) return kickoffTime;
+  return parsed.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
   });
 }
 
@@ -71,6 +90,7 @@ export default function TeamDashboardScreen() {
   const [publishedLineupCount, setPublishedLineupCount] = useState(0);
   const [upcomingEvents, setUpcomingEvents] = useState<EventSummary[]>([]);
   const [recentLineups, setRecentLineups] = useState<{ id: string; title: string; formation: string; status: string }[]>([]);
+  const [myLineups, setMyLineups] = useState<MyLineup[]>([]);
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const firstName = profile?.first_name ?? profile?.full_name?.split(' ')[0] ?? (isCoach ? 'Coach' : 'Player');
@@ -88,13 +108,28 @@ export default function TeamDashboardScreen() {
     if (!teamId) { setLoading(false); return; }
     setError(null);
     try {
-      const [teamRes, playersRes, eventsCountRes, eventsRes, lineupsCountRes, lineupsRes] = await Promise.all([
+      const baseQueries = [
         supabase.from('teams').select('id, name').eq('id', teamId).single(),
         supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', teamId),
         supabase.from('events').select('id', { count: 'exact', head: true }).eq('team_id', teamId).gte('date', today),
         supabase.from('events').select('id, event_type, title, opponent, location, date, kickoff_time').eq('team_id', teamId).gte('date', today).order('date', { ascending: true }).limit(3),
         supabase.from('lineups').select('id', { count: 'exact', head: true }).eq('team_id', teamId).eq('status', 'published'),
         supabase.from('lineups').select('id, title, formation, status').eq('team_id', teamId).order('updated_at', { ascending: false }).limit(2),
+      ] as const;
+
+      const playerLineupQuery = !isCoach && profile?.id
+        ? supabase
+            .from('lineup_players')
+            .select('id, position_key, is_starter, lineups!inner(id, title, formation, status, event_id, events!inner(date))')
+            .eq('player_id', profile.id)
+            .eq('lineups.team_id', teamId)
+            .eq('lineups.status', 'published')
+            .gte('lineups.events.date', today)
+        : null;
+
+      const [teamRes, playersRes, eventsCountRes, eventsRes, lineupsCountRes, lineupsRes, myLineupsRes] = await Promise.all([
+        ...baseQueries,
+        playerLineupQuery ?? Promise.resolve(null),
       ]);
 
       if (teamRes.error) throw teamRes.error;
@@ -105,13 +140,25 @@ export default function TeamDashboardScreen() {
       setUpcomingEvents(eventsRes.data ?? []);
       setPublishedLineupCount(lineupsCountRes.count ?? 0);
       setRecentLineups(lineupsRes.data ?? []);
+
+      if (myLineupsRes && 'data' in myLineupsRes && myLineupsRes.data) {
+        const mapped: MyLineup[] = myLineupsRes.data.map((row: any) => ({
+          id: row.lineups.id,
+          title: row.lineups.title,
+          formation: row.lineups.formation,
+          position_key: row.position_key,
+          is_starter: row.is_starter,
+          event_date: row.lineups.events?.date ?? null,
+        }));
+        setMyLineups(mapped);
+      }
     } catch {
       setError('Failed to load dashboard. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [teamId, today]);
+  }, [teamId, today, isCoach, profile?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -196,10 +243,174 @@ export default function TeamDashboardScreen() {
 
         {/* Stat cards */}
         <View style={styles.statRow}>
-          <StatCard icon="people-outline" value={playerCount} label="Team Players" gradient={Gradients.statBlue} />
-          <StatCard icon="calendar-outline" value={eventCount} label="Upcoming" gradient={Gradients.statEmerald} />
-          <StatCard icon="clipboard-outline" value={publishedLineupCount} label="Lineups" gradient={Gradients.statPurple} />
+          {isCoach ? (
+            <>
+              <StatCard icon="people-outline" value={playerCount} label="Team Players" gradient={Gradients.statBlue} />
+              <StatCard icon="calendar-outline" value={eventCount} label="Upcoming" gradient={Gradients.statEmerald} />
+              <StatCard icon="clipboard-outline" value={publishedLineupCount} label="Lineups" gradient={Gradients.statPurple} />
+            </>
+          ) : (
+            <>
+              <StatCard icon="calendar-outline" value={eventCount} label="Upcoming" gradient={Gradients.statEmerald} />
+              <StatCard icon="clipboard-outline" value={myLineups.length} label="My Lineups" gradient={Gradients.statPurple} />
+              <StatCard icon="people-outline" value={playerCount} label="Teammates" gradient={Gradients.statBlue} />
+            </>
+          )}
         </View>
+
+        {/* Quick Actions */}
+        <View>
+          <Text style={styles.quickActionsTitle}>Quick Actions</Text>
+          <View style={styles.quickActions}>
+            {isCoach ? (
+              <>
+                <TouchableOpacity
+                  style={styles.quickActionBtn}
+                  activeOpacity={0.8}
+                  onPress={() => router.push({ pathname: '/team/create-event', params: { teamId } })}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.emeraldSoft }]}>
+                    <Ionicons name="add-circle-outline" size={18} color={Colors.emerald} />
+                  </View>
+                  <Text style={styles.quickActionLabel}>Create Event</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickActionBtn}
+                  activeOpacity={0.8}
+                  onPress={() => router.push({ pathname: '/team/select-game', params: { teamId } })}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.purpleSoft }]}>
+                    <Ionicons name="clipboard-outline" size={18} color={Colors.purple} />
+                  </View>
+                  <Text style={styles.quickActionLabel}>Build Lineup</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickActionBtn}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(`/team/${team.id}/roster`)}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.blueSoft }]}>
+                    <Ionicons name="people-outline" size={18} color={Colors.primary} />
+                  </View>
+                  <Text style={styles.quickActionLabel}>Roster</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickActionBtn}
+                  activeOpacity={0.8}
+                  onPress={() => router.push({ pathname: '/team/invite-players', params: { teamId } })}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.amberSoft }]}>
+                    <Ionicons name="share-outline" size={18} color={Colors.amber} />
+                  </View>
+                  <Text style={styles.quickActionLabel}>Invite</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.quickActionBtn}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(`/team/${team.id}/events`)}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.emeraldSoft }]}>
+                    <Ionicons name="calendar-outline" size={18} color={Colors.emerald} />
+                  </View>
+                  <Text style={styles.quickActionLabel}>Calendar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickActionBtn}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(`/team/${team.id}/lineups`)}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.purpleSoft }]}>
+                    <Ionicons name="clipboard-outline" size={18} color={Colors.purple} />
+                  </View>
+                  <Text style={styles.quickActionLabel}>Lineups</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickActionBtn}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(`/team/${team.id}/roster`)}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.blueSoft }]}>
+                    <Ionicons name="people-outline" size={18} color={Colors.primary} />
+                  </View>
+                  <Text style={styles.quickActionLabel}>Roster</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* My Lineup Status (player only) */}
+        {!isCoach && (
+          <Card padded={false} style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <View style={styles.panelHeaderLeft}>
+                <View style={[styles.panelIconWrap, { backgroundColor: Colors.emerald }]}>
+                  <Ionicons name="football-outline" size={16} color="#fff" />
+                </View>
+                <View>
+                  <Text style={styles.panelTitle}>My Lineup Status</Text>
+                  <Text style={styles.panelSubtitle}>Upcoming selections</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => router.push(`/team/${team.id}/lineups`)} activeOpacity={0.8}>
+                <Text style={styles.viewAllText}>View all</Text>
+              </TouchableOpacity>
+            </View>
+
+            {myLineups.length === 0 ? (
+              <Card muted style={styles.emptyCard}>
+                <Text style={styles.emptyText}>You haven't been selected in any upcoming lineups yet.</Text>
+              </Card>
+            ) : (
+              myLineups.map(lineup => (
+                <TouchableOpacity
+                  key={lineup.id}
+                  onPress={() => router.push(`/team/${team.id}/lineups`)}
+                  activeOpacity={0.7}
+                >
+                  <Card muted style={styles.eventCard}>
+                    <View style={styles.eventTop}>
+                      <Text style={styles.eventTitle} numberOfLines={1}>{lineup.title}</Text>
+                      <Chip label="Published" tone="mint" />
+                    </View>
+                    <View style={styles.metaRow}>
+                      <Ionicons name="shirt-outline" size={12} color={Colors.textMuted} />
+                      <Text style={styles.metaText}>Position: {lineup.position_key}</Text>
+                      <Chip
+                        label={lineup.is_starter ? 'Starter' : 'Sub'}
+                        tone={lineup.is_starter ? 'emerald' : 'lavender'}
+                        style={styles.starterChip}
+                      />
+                    </View>
+                    {lineup.event_date && (
+                      <View style={styles.metaRow}>
+                        <Ionicons name="calendar-outline" size={12} color={Colors.textMuted} />
+                        <Text style={styles.metaText}>Match: {formatDate(lineup.event_date)}</Text>
+                      </View>
+                    )}
+                  </Card>
+                </TouchableOpacity>
+              ))
+            )}
+
+            <TouchableOpacity
+              style={styles.manageButton}
+              onPress={() => router.push(`/team/${team.id}/lineups`)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.manageButtonText}>View Lineups</Text>
+              <Ionicons name="arrow-forward" size={14} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          </Card>
+        )}
 
         {/* Upcoming Events */}
         <Card padded={false} style={styles.panel}>
@@ -242,10 +453,11 @@ export default function TeamDashboardScreen() {
                     </View>
                     <View style={styles.metaRow}>
                       <Ionicons name="calendar-outline" size={12} color={Colors.textMuted} />
-                      <Text style={styles.metaText}>
-                        {formatDate(event.date)}
-                        {event.kickoff_time ? ` at ${event.kickoff_time}` : ''}
-                      </Text>
+                      <Text style={styles.metaText}>Date: {formatDate(event.date)}</Text>
+                    </View>
+                    <View style={styles.metaRow}>
+                      <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
+                      <Text style={styles.metaText}>Time: {formatKickoffTime(event.kickoff_time)}</Text>
                     </View>
                     {event.location ? (
                       <View style={styles.metaRow}>
@@ -260,56 +472,54 @@ export default function TeamDashboardScreen() {
           )}
         </Card>
 
-        {/* Recent Lineups */}
-        <Card padded={false} style={styles.panel}>
-          <View style={styles.panelHeaderLeft}>
-            <View style={[styles.panelIconWrap, { backgroundColor: Colors.emerald }]}>
-              <Ionicons name="clipboard-outline" size={16} color="#fff" />
+        {/* Recent Lineups (coach only) */}
+        {isCoach && (
+          <Card padded={false} style={styles.panel}>
+            <View style={styles.panelHeaderLeft}>
+              <View style={[styles.panelIconWrap, { backgroundColor: Colors.emerald }]}>
+                <Ionicons name="clipboard-outline" size={16} color="#fff" />
+              </View>
+              <View>
+                <Text style={styles.panelTitle}>Recent Lineups</Text>
+                <Text style={styles.panelSubtitle}>Latest configurations</Text>
+              </View>
             </View>
-            <View>
-              <Text style={styles.panelTitle}>Recent Lineups</Text>
-              <Text style={styles.panelSubtitle}>Latest configurations</Text>
-            </View>
-          </View>
 
-          {recentLineups.length === 0 ? (
-            <Card muted style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No published lineups yet.</Text>
-            </Card>
-          ) : (
-            recentLineups.map(lineup => (
-              <TouchableOpacity
-                key={lineup.id}
-                onPress={() => {
-                  if (isCoach) {
-                    router.push({ pathname: '/team/lineup-builder', params: { teamId, lineupId: lineup.id } });
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Card muted style={styles.eventCard}>
-                  <View style={styles.eventTop}>
-                    <Text style={styles.eventTitle} numberOfLines={1}>{lineup.title}</Text>
-                    <Chip
-                      label={lineup.status === 'published' ? 'Published' : 'Draft'}
-                      tone={lineup.status === 'published' ? 'mint' : 'lavender'}
-                    />
-                  </View>
-                  <Text style={styles.metaText}>Formation: {lineup.formation}</Text>
-                </Card>
-              </TouchableOpacity>
-            ))
-          )}
+            {recentLineups.length === 0 ? (
+              <Card muted style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No published lineups yet.</Text>
+              </Card>
+            ) : (
+              recentLineups.map(lineup => (
+                <TouchableOpacity
+                  key={lineup.id}
+                  onPress={() => router.push({ pathname: '/team/lineup-builder', params: { teamId, lineupId: lineup.id } })}
+                  activeOpacity={0.7}
+                >
+                  <Card muted style={styles.eventCard}>
+                    <View style={styles.eventTop}>
+                      <Text style={styles.eventTitle} numberOfLines={1}>{lineup.title}</Text>
+                      <Chip
+                        label={lineup.status === 'published' ? 'Published' : 'Draft'}
+                        tone={lineup.status === 'published' ? 'mint' : 'lavender'}
+                      />
+                    </View>
+                    <Text style={styles.metaText}>Formation: {lineup.formation}</Text>
+                  </Card>
+                </TouchableOpacity>
+              ))
+            )}
 
-          <TouchableOpacity
-            style={styles.manageButton}
-            onPress={() => router.push(`/team/${team.id}/lineups`)}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.manageButtonText}>Manage Lineups</Text>
-            <Ionicons name="arrow-forward" size={14} color={Colors.textPrimary} />
-          </TouchableOpacity>
-        </Card>
+            <TouchableOpacity
+              style={styles.manageButton}
+              onPress={() => router.push(`/team/${team.id}/lineups`)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.manageButtonText}>Manage Lineups</Text>
+              <Ionicons name="arrow-forward" size={14} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          </Card>
+        )}
       </ScrollView>
     </LinearGradient>
   );
@@ -364,6 +574,40 @@ const styles = StyleSheet.create({
   statRow: {
     flexDirection: 'row', gap: 10,
   },
+  quickActionsTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontFamily: UI.typography.bold,
+    marginBottom: 8,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  quickActionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+  },
+  quickActionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionLabel: {
+    color: '#fff',
+    fontSize: 11,
+    fontFamily: UI.typography.bold,
+    textAlign: 'center',
+  },
   panel: {
     padding: UI.spacing.md, gap: 12, borderRadius: 24,
   },
@@ -401,6 +645,9 @@ const styles = StyleSheet.create({
   },
   metaText: {
     color: Colors.textSecondary, fontSize: 13, fontFamily: UI.typography.medium,
+  },
+  starterChip: {
+    marginLeft: 'auto',
   },
   manageButton: {
     borderRadius: UI.radius.lg, borderWidth: 1, borderColor: Colors.border,
