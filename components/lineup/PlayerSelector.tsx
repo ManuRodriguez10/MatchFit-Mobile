@@ -26,7 +26,7 @@ interface PlayerSelectorProps {
 
 const positionColors: Record<PlayerPosition, string> = {
   goalkeeper: '#EAB308',
-  defender: '#118FF3',
+  defender: '#8B5CF6',
   midfielder: '#10B981',
   forward: '#EF4444',
 };

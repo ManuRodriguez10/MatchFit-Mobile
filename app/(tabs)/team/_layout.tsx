@@ -30,6 +30,13 @@ export default function TeamLayout() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="team-setup"
+        options={{
+          presentation: 'modal',
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

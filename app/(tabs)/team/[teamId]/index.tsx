@@ -258,94 +258,57 @@ export default function TeamDashboardScreen() {
           )}
         </View>
 
-        {/* Quick Actions */}
-        <View>
-          <Text style={styles.quickActionsTitle}>Quick Actions</Text>
-          <View style={styles.quickActions}>
-            {isCoach ? (
-              <>
-                <TouchableOpacity
-                  style={styles.quickActionBtn}
-                  activeOpacity={0.8}
-                  onPress={() => router.push({ pathname: '/team/create-event', params: { teamId } })}
-                >
-                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.emeraldSoft }]}>
-                    <Ionicons name="add-circle-outline" size={18} color={Colors.emerald} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>Create Event</Text>
-                </TouchableOpacity>
+        {/* Quick Actions (coach only) */}
+        {isCoach && (
+          <View>
+            <Text style={styles.quickActionsTitle}>Quick Actions</Text>
+            <View style={styles.quickActions}>
+              <TouchableOpacity
+                style={styles.quickActionBtn}
+                activeOpacity={0.8}
+                onPress={() => router.push({ pathname: '/team/create-event', params: { teamId } })}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: Colors.emeraldSoft }]}>
+                  <Ionicons name="add-circle-outline" size={18} color={Colors.emerald} />
+                </View>
+                <Text style={styles.quickActionLabel}>Create Event</Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.quickActionBtn}
-                  activeOpacity={0.8}
-                  onPress={() => router.push({ pathname: '/team/select-game', params: { teamId } })}
-                >
-                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.purpleSoft }]}>
-                    <Ionicons name="clipboard-outline" size={18} color={Colors.purple} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>Build Lineup</Text>
-                </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickActionBtn}
+                activeOpacity={0.8}
+                onPress={() => router.push({ pathname: '/team/select-game', params: { teamId } })}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: Colors.purpleSoft }]}>
+                  <Ionicons name="clipboard-outline" size={18} color={Colors.purple} />
+                </View>
+                <Text style={styles.quickActionLabel}>Build Lineup</Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.quickActionBtn}
-                  activeOpacity={0.8}
-                  onPress={() => router.push(`/team/${team.id}/roster`)}
-                >
-                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.blueSoft }]}>
-                    <Ionicons name="people-outline" size={18} color={Colors.primary} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>Roster</Text>
-                </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickActionBtn}
+                activeOpacity={0.8}
+                onPress={() => router.push(`/team/${team.id}/roster`)}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: Colors.blueSoft }]}>
+                  <Ionicons name="people-outline" size={18} color={Colors.primary} />
+                </View>
+                <Text style={styles.quickActionLabel}>Roster</Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.quickActionBtn}
-                  activeOpacity={0.8}
-                  onPress={() => router.push({ pathname: '/team/invite-players', params: { teamId } })}
-                >
-                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.amberSoft }]}>
-                    <Ionicons name="share-outline" size={18} color={Colors.amber} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>Invite</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={styles.quickActionBtn}
-                  activeOpacity={0.8}
-                  onPress={() => router.push(`/team/${team.id}/events`)}
-                >
-                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.emeraldSoft }]}>
-                    <Ionicons name="calendar-outline" size={18} color={Colors.emerald} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>Calendar</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.quickActionBtn}
-                  activeOpacity={0.8}
-                  onPress={() => router.push(`/team/${team.id}/lineups`)}
-                >
-                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.purpleSoft }]}>
-                    <Ionicons name="clipboard-outline" size={18} color={Colors.purple} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>Lineups</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.quickActionBtn}
-                  activeOpacity={0.8}
-                  onPress={() => router.push(`/team/${team.id}/roster`)}
-                >
-                  <View style={[styles.quickActionIcon, { backgroundColor: Colors.blueSoft }]}>
-                    <Ionicons name="people-outline" size={18} color={Colors.primary} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>Roster</Text>
-                </TouchableOpacity>
-              </>
-            )}
+              <TouchableOpacity
+                style={styles.quickActionBtn}
+                activeOpacity={0.8}
+                onPress={() => router.push({ pathname: '/team/invite-players', params: { teamId } })}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: Colors.amberSoft }]}>
+                  <Ionicons name="share-outline" size={18} color={Colors.amber} />
+                </View>
+                <Text style={styles.quickActionLabel}>Invite</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        )}
 
         {/* My Lineup Status (player only) */}
         {!isCoach && (

@@ -78,20 +78,16 @@ export default function JoinTeamScreen() {
         return;
       }
 
-      // Join the team
-      const { error: joinError } = await supabase
-        .from('team_players')
-        .insert({
-          team_id: team.id,
-          player_id: user!.id,
-          jersey_number: null,
-          positions: [],
-        });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      if (joinError) throw joinError;
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setJoinedTeamName(team.name);
+      // Navigate to team setup screen to collect jersey + position
+      router.replace({
+        pathname: '/team/team-setup',
+        params: {
+          teamId: team.id,
+          teamName: team.name,
+        },
+      });
     } catch (error) {
       setGeneralError(
         error instanceof Error ? error.message : 'Failed to join team. Please try again.'

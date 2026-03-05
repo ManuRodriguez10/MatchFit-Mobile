@@ -42,11 +42,14 @@ interface PlayerAssignment {
 }
 
 export default function LineupBuilderScreen() {
-  const { teamId, lineupId, eventId } = useLocalSearchParams<{
-    teamId: string;
-    lineupId?: string;
-    eventId?: string;
+  const params = useLocalSearchParams<{
+    teamId?: string | string[];
+    lineupId?: string | string[];
+    eventId?: string | string[];
   }>();
+  const teamId = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
+  const lineupIdParam = Array.isArray(params.lineupId) ? params.lineupId[0] : params.lineupId;
+  const eventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -63,8 +66,9 @@ export default function LineupBuilderScreen() {
   const [selectingForSubs, setSelectingForSubs] = useState(false);
   const [eventTitle, setEventTitle] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [activeLineupId, setActiveLineupId] = useState<string | null>(lineupIdParam ?? null);
 
-  const isEditing = !!lineupId && lineupId.length > 0;
+  const isEditing = !!activeLineupId;
   const formationData = getFormation(formation);
 
   // Get all assigned player IDs (starters + subs)
@@ -76,10 +80,14 @@ export default function LineupBuilderScreen() {
   // Load roster and optionally existing lineup
   useEffect(() => {
     loadData();
-  }, [teamId, lineupId]);
+  }, [teamId, lineupIdParam, eventId]);
 
   const loadData = async () => {
     try {
+      if (!teamId) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
 
       // Fetch roster
@@ -96,6 +104,7 @@ export default function LineupBuilderScreen() {
         positions: r.positions || [],
         profile: r.profiles,
       })) as TeamPlayerWithProfile[];
+      const rosterByProfileId = new Map(mapped.map((m) => [m.profile.id, m]));
 
       setPlayers(mapped);
 
@@ -110,15 +119,34 @@ export default function LineupBuilderScreen() {
         if (eventData) {
           setEventTitle(eventData.title || `${eventData.event_type} vs ${eventData.opponent || 'TBD'}`);
         }
+      } else {
+        setEventTitle(null);
       }
 
+      // Resolve lineup ID: explicit param, or latest draft for this game.
+      let resolvedLineupId: string | null = lineupIdParam ?? null;
+      if (!resolvedLineupId && eventId) {
+        const { data: draftLineupData } = await supabase
+          .from('lineups')
+          .select('id')
+          .eq('team_id', teamId)
+          .eq('event_id', eventId)
+          .eq('status', 'draft')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        resolvedLineupId = draftLineupData?.id ?? null;
+      }
+
+      setActiveLineupId(resolvedLineupId);
+
       // If editing, load existing lineup
-      if (lineupId && lineupId.length > 0) {
-        console.log('[LineupBuilder] Loading lineup with ID:', lineupId);
+      if (resolvedLineupId) {
+        console.log('[LineupBuilder] Loading lineup with ID:', resolvedLineupId);
         const { data: lineupData, error: lineupError } = await supabase
           .from('lineups')
           .select('*')
-          .eq('id', lineupId)
+          .eq('id', resolvedLineupId)
           .single();
 
         console.log('[LineupBuilder] Lineup data:', JSON.stringify(lineupData));
@@ -133,22 +161,42 @@ export default function LineupBuilderScreen() {
           // Load lineup players
           const { data: lpData, error: lpError } = await supabase
             .from('lineup_players')
-            .select('*, profiles:player_id(id, full_name, email)')
-            .eq('lineup_id', lineupId);
+            .select('player_id, position_key, is_starter')
+            .eq('lineup_id', resolvedLineupId);
 
           console.log('[LineupBuilder] Lineup players count:', lpData?.length);
           console.log('[LineupBuilder] Lineup players error:', lpError);
           console.log('[LineupBuilder] Lineup players data:', JSON.stringify(lpData));
 
+          if (lpError) throw lpError;
+
           if (lpData) {
             const starterAssignments: Record<string, PlayerAssignment> = {};
             const subsList: PlayerAssignment[] = [];
 
+            const playerIds = (lpData as any[])
+              .map((lp) => lp.player_id)
+              .filter(Boolean) as string[];
+            const missingProfileIds = [...new Set(playerIds)].filter((id) => !rosterByProfileId.has(id));
+            let missingProfilesById = new Map<string, string>();
+
+            if (missingProfileIds.length > 0) {
+              const { data: missingProfiles } = await supabase
+                .from('profiles')
+                .select('id, full_name')
+                .in('id', missingProfileIds);
+
+              missingProfilesById = new Map(
+                (missingProfiles || []).map((p: any) => [p.id, p.full_name]),
+              );
+            }
+
             for (const lp of lpData as any[]) {
-              const rosterEntry = mapped.find(m => m.profile.id === lp.player_id);
+              if (!lp.player_id) continue;
+              const rosterEntry = rosterByProfileId.get(lp.player_id);
               const assignment: PlayerAssignment = {
                 playerId: lp.player_id,
-                playerName: lp.profiles?.full_name || 'Unknown',
+                playerName: rosterEntry?.profile.full_name || missingProfilesById.get(lp.player_id) || 'Unknown',
                 jerseyNumber: rosterEntry?.jersey_number ?? null,
                 positions: rosterEntry?.positions,
               };
@@ -164,6 +212,11 @@ export default function LineupBuilderScreen() {
             setSubstitutes(subsList);
           }
         }
+      } else {
+        setFormation(DEFAULT_FORMATION);
+        setTitle('');
+        setAssignments({});
+        setSubstitutes([]);
       }
     } catch (err) {
       console.error('Error loading lineup data:', err);
@@ -297,7 +350,7 @@ export default function LineupBuilderScreen() {
   };
 
   const handleSave = async (status: 'draft' | 'published') => {
-    if (!user) return;
+    if (!user || !teamId) return;
 
     const starterCount = Object.keys(assignments).length;
     if (status === 'published' && starterCount < 11) {
@@ -312,9 +365,26 @@ export default function LineupBuilderScreen() {
 
     try {
       setSaving(true);
+      let targetLineupId = activeLineupId;
+
+      // Enforce a single draft per team+event by reusing the latest draft row.
+      if (!targetLineupId && status === 'draft' && eventId) {
+        const { data: existingDraft } = await supabase
+          .from('lineups')
+          .select('id')
+          .eq('team_id', teamId)
+          .eq('event_id', eventId)
+          .eq('status', 'draft')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (existingDraft?.id) {
+          targetLineupId = existingDraft.id;
+        }
+      }
 
       const lineupRecord = {
-        id: lineupId || uuid(),
+        id: targetLineupId || uuid(),
         team_id: teamId,
         event_id: eventId || null,
         title: lineupTitle,
@@ -323,7 +393,7 @@ export default function LineupBuilderScreen() {
         created_by: user.id,
       };
 
-      if (isEditing) {
+      if (targetLineupId) {
         const { error } = await supabase
           .from('lineups')
           .update({
@@ -332,15 +402,16 @@ export default function LineupBuilderScreen() {
             status: lineupRecord.status,
             event_id: lineupRecord.event_id,
           })
-          .eq('id', lineupId);
+          .eq('id', targetLineupId);
         if (error) throw error;
 
         // Delete old players and re-insert
-        await supabase.from('lineup_players').delete().eq('lineup_id', lineupId);
+        await supabase.from('lineup_players').delete().eq('lineup_id', targetLineupId);
       } else {
         const { error } = await supabase.from('lineups').insert(lineupRecord);
         if (error) throw error;
       }
+      setActiveLineupId(lineupRecord.id);
 
       // Insert lineup players
       const playerRows = [
@@ -365,6 +436,23 @@ export default function LineupBuilderScreen() {
           .from('lineup_players')
           .insert(playerRows);
         if (playersError) throw playersError;
+      }
+
+      // Keep exactly one draft per team+event to avoid opening stale/empty duplicates.
+      if (status === 'draft' && eventId) {
+        const { data: duplicateDrafts } = await supabase
+          .from('lineups')
+          .select('id')
+          .eq('team_id', teamId)
+          .eq('event_id', eventId)
+          .eq('status', 'draft')
+          .neq('id', lineupRecord.id);
+
+        const duplicateIds = (duplicateDrafts || []).map((row: any) => row.id);
+        if (duplicateIds.length > 0) {
+          await supabase.from('lineup_players').delete().in('lineup_id', duplicateIds);
+          await supabase.from('lineups').delete().in('id', duplicateIds);
+        }
       }
 
       setHasUnsavedChanges(false);

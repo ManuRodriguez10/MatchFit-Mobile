@@ -25,6 +25,7 @@ interface GameOption {
   date: string;
   kickoff_time: string | null;
   location: string | null;
+  draftLineupId: string | null;
 }
 
 function formatDate(isoDate: string) {
@@ -46,12 +47,13 @@ function formatTime(kickoffTime: string | null) {
 }
 
 export default function SelectGameScreen() {
-  const { teamId } = useLocalSearchParams<{ teamId: string }>();
+  const { teamId } = useLocalSearchParams<{ teamId?: string | string[] }>();
+  const resolvedTeamId = Array.isArray(teamId) ? teamId[0] : teamId;
   const [games, setGames] = useState<GameOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadGames = useCallback(async () => {
-    if (!teamId) { setLoading(false); return; }
+    if (!resolvedTeamId) { setLoading(false); return; }
     setLoading(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
@@ -60,7 +62,7 @@ export default function SelectGameScreen() {
       const { data: gamesData } = await supabase
         .from('events')
         .select('id, title, opponent, date, kickoff_time, location')
-        .eq('team_id', teamId)
+        .eq('team_id', resolvedTeamId)
         .eq('event_type', 'game')
         .gte('date', today)
         .order('date', { ascending: true });
@@ -70,26 +72,41 @@ export default function SelectGameScreen() {
         return;
       }
 
-      // Get event IDs that already have a published lineup
+      // Get published + draft lineups for these games so we can resume drafts.
       const gameIds = gamesData.map(g => g.id);
       const { data: lineupData } = await supabase
         .from('lineups')
-        .select('event_id, status')
+        .select('id, event_id, status, updated_at')
         .in('event_id', gameIds)
-        .eq('status', 'published');
+        .in('status', ['published', 'draft'])
+        .order('updated_at', { ascending: false });
 
       const publishedEventIds = new Set(
-        (lineupData ?? []).map((l: any) => l.event_id),
+        (lineupData ?? []).filter((l: any) => l.status === 'published').map((l: any) => l.event_id),
       );
+      const latestDraftByEvent = new Map<string, string>();
+      for (const lineup of lineupData ?? []) {
+        const row = lineup as any;
+        if (row.status === 'draft' && row.event_id && !latestDraftByEvent.has(row.event_id)) {
+          latestDraftByEvent.set(row.event_id, row.id);
+        }
+      }
 
-      // Filter out games with published lineups
-      setGames(gamesData.filter(g => !publishedEventIds.has(g.id)));
+      // Filter out games with published lineups and attach draft lineup IDs.
+      setGames(
+        gamesData
+          .filter(g => !publishedEventIds.has(g.id))
+          .map(g => ({
+            ...g,
+            draftLineupId: latestDraftByEvent.get(g.id) ?? null,
+          })),
+      );
     } catch (err) {
       console.error('Error loading games:', err);
     } finally {
       setLoading(false);
     }
-  }, [teamId]);
+  }, [resolvedTeamId]);
 
   useFocusEffect(useCallback(() => { loadGames(); }, [loadGames]));
 
@@ -137,7 +154,7 @@ export default function SelectGameScreen() {
             <TouchableOpacity
               style={styles.createEventBtn}
               activeOpacity={0.8}
-              onPress={() => router.replace({ pathname: '/team/create-event', params: { teamId } })}
+              onPress={() => router.replace({ pathname: '/team/create-event', params: { teamId: resolvedTeamId } })}
             >
               <Ionicons name="add-circle-outline" size={18} color="#fff" />
               <Text style={styles.createEventText}>Create New Game</Text>
@@ -167,7 +184,11 @@ export default function SelectGameScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     router.push({
                       pathname: '/team/lineup-builder',
-                      params: { teamId, eventId: game.id },
+                      params: {
+                        teamId: resolvedTeamId,
+                        eventId: game.id,
+                        ...(game.draftLineupId ? { lineupId: game.draftLineupId } : {}),
+                      },
                     });
                   }}
                 >
@@ -191,10 +212,16 @@ export default function SelectGameScreen() {
                           <Text style={styles.gameMetaText}>{game.location}</Text>
                         </View>
                       ) : null}
+                      {game.draftLineupId ? (
+                        <View style={styles.gameMeta}>
+                          <Ionicons name="document-text-outline" size={12} color={Colors.amber} />
+                          <Text style={[styles.gameMetaText, styles.draftResumeText]}>Draft saved</Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                   <View style={styles.selectChip}>
-                    <Text style={styles.selectChipText}>Select</Text>
+                    <Text style={styles.selectChipText}>{game.draftLineupId ? 'Resume' : 'Select'}</Text>
                     <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
                   </View>
                 </TouchableOpacity>
@@ -210,7 +237,7 @@ export default function SelectGameScreen() {
                 style={styles.hintLink}
                 onPress={() => {
                   router.back();
-                  setTimeout(() => router.push(`/team/${teamId}/lineups`), 100);
+                  setTimeout(() => router.push(`/team/${resolvedTeamId}/lineups`), 100);
                 }}
               >
                 Lineups tab
@@ -344,6 +371,10 @@ const styles = StyleSheet.create({
   },
   gameMetaText: {
     fontSize: 12, color: Colors.textMuted, fontFamily: UI.typography.medium,
+  },
+  draftResumeText: {
+    color: Colors.amber,
+    fontFamily: UI.typography.semibold,
   },
   selectChip: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
