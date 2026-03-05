@@ -436,8 +436,8 @@ export default function EventDetailScreen() {
           )}
         </Card>
 
-        {/* Edit button — coaches only */}
-        {isCoach && (
+        {/* Edit button — coaches only, hide for past events */}
+        {isCoach && event.date >= new Date().toISOString().slice(0, 10) && (
           <View style={styles.editBtnWrap}>
             <Button
               title="Edit Event"

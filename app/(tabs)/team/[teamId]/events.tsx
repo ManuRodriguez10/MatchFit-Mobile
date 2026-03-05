@@ -10,6 +10,7 @@ import {
   Pressable,
   Platform,
   useWindowDimensions,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useGlobalSearchParams, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,14 +48,13 @@ const EVENT_COLORS: Record<EventItem['event_type'], string> = {
   meeting: '#8B5CF6',
 };
 
-type TabKey = 'calendar' | 'week' | 'past' | 'all';
-const TAB_KEYS: TabKey[] = ['calendar', 'week', 'past', 'all'];
+type TabKey = 'calendar' | 'week' | 'past';
+const TAB_KEYS: TabKey[] = ['calendar', 'week', 'past'];
 
 const TAB_LABELS: Record<TabKey, string> = {
   calendar: 'Calendar',
   week: 'This Week',
   past: 'Past',
-  all: 'All',
 };
 
 // ---------------------------------------------------------------------------
@@ -131,6 +131,16 @@ function eventTitle(event: EventItem): string {
   return event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1);
 }
 
+function groupEventsByMonth(events: EventItem[]): Record<string, EventItem[]> {
+  const grouped: Record<string, EventItem[]> = {};
+  for (const event of events) {
+    const date = new Date(`${event.date}T00:00:00`);
+    const monthKey = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    (grouped[monthKey] ??= []).push(event);
+  }
+  return grouped;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -150,6 +160,18 @@ export default function TeamEventsScreen() {
   });
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
   const [selectedWeekDay, setSelectedWeekDay] = useState<string | null>(null);
+  const [showClearCalendar, setShowClearCalendar] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState('');
+  const [clearing, setClearing] = useState(false);
+  const [showClearPastEvents, setShowClearPastEvents] = useState(false);
+  const [clearPastConfirmText, setClearPastConfirmText] = useState('');
+  const [clearingPast, setClearingPast] = useState(false);
+  const [pastEventsMonth, setPastEventsMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  const [showPastMonthPicker, setShowPastMonthPicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(pastEventsMonth.year);
   const visibleTabKeys = useMemo<TabKey[]>(
     () => (isCoach ? TAB_KEYS : ['calendar', 'week']),
     [isCoach],
@@ -220,6 +242,45 @@ export default function TeamEventsScreen() {
 
   useFocusEffect(loadEvents);
 
+  // ── Clear calendar handler ─────────────────────────────────────────────
+  const handleClearCalendar = async () => {
+    if (!teamId || clearConfirmText !== 'DELETE') return;
+    setClearing(true);
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('team_id', teamId);
+      if (!error) {
+        setEvents([]);
+        setShowClearCalendar(false);
+        setClearConfirmText('');
+      }
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  // ── Clear past events handler ──────────────────────────────────────────
+  const handleClearPastEvents = async () => {
+    if (!teamId || clearPastConfirmText !== 'DELETE') return;
+    setClearingPast(true);
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('team_id', teamId)
+        .lt('date', todayStr);
+      if (!error) {
+        setEvents((prev) => prev.filter((e) => e.date >= todayStr));
+        setShowClearPastEvents(false);
+        setClearPastConfirmText('');
+      }
+    } finally {
+      setClearingPast(false);
+    }
+  };
+
   // ── Derived data ──────────────────────────────────────────────────────
   const todayStr = useMemo(() => toISO(new Date()), []);
   const { start: weekStart, end: weekEnd } = useMemo(() => getWeekRange(new Date()), []);
@@ -235,12 +296,24 @@ export default function TeamEventsScreen() {
     [events, todayStr],
   );
 
+  const pastEventsForSelectedMonth = useMemo(() => {
+    const monthStart = new Date(pastEventsMonth.year, pastEventsMonth.month, 1);
+    const monthEnd = new Date(pastEventsMonth.year, pastEventsMonth.month + 1, 0);
+    const monthStartStr = toISO(monthStart);
+    const monthEndStr = toISO(monthEnd);
+    return pastEvents.filter((e) => e.date >= monthStartStr && e.date <= monthEndStr);
+  }, [pastEvents, pastEventsMonth]);
+
+  const pastMonthLabel = new Date(pastEventsMonth.year, pastEventsMonth.month).toLocaleDateString(
+    'en-US',
+    { month: 'long', year: 'numeric' },
+  );
+
   const counts: Record<TabKey, number> = useMemo(
     () => ({
       calendar: events.length,
       week: thisWeekEvents.length,
       past: pastEvents.length,
-      all: events.length,
     }),
     [events.length, thisWeekEvents.length, pastEvents.length],
   );
@@ -308,6 +381,12 @@ export default function TeamEventsScreen() {
     }
   }, [activeTab, visibleTabKeys]);
 
+  useEffect(() => {
+    if (showPastMonthPicker) {
+      setPickerYear(pastEventsMonth.year);
+    }
+  }, [showPastMonthPicker, pastEventsMonth.year]);
+
   // ── Navigators ────────────────────────────────────────────────────────
   const prevMonth = () =>
     setCalendarMonth((prev) => {
@@ -322,6 +401,25 @@ export default function TeamEventsScreen() {
       const y = prev.month === 11 ? prev.year + 1 : prev.year;
       return { year: y, month: m };
     });
+
+  const prevPastMonth = () =>
+    setPastEventsMonth((prev) => {
+      const m = prev.month === 0 ? 11 : prev.month - 1;
+      const y = prev.month === 0 ? prev.year - 1 : prev.year;
+      return { year: y, month: m };
+    });
+
+  const nextPastMonth = () =>
+    setPastEventsMonth((prev) => {
+      const m = prev.month === 11 ? 0 : prev.month + 1;
+      const y = prev.month === 11 ? prev.year + 1 : prev.year;
+      return { year: y, month: m };
+    });
+
+  const handleSelectPastMonth = (month: number) => {
+    setPastEventsMonth({ year: pickerYear, month });
+    setShowPastMonthPicker(false);
+  };
 
   // ── Render helpers ────────────────────────────────────────────────────
 
@@ -651,23 +749,42 @@ export default function TeamEventsScreen() {
 
   // ── Past tab ──────────────────────────────────────────────────────────
   const renderPast = () => (
-    <Card padded={false} style={styles.panel}>
-      <Text style={styles.panelTitle}>Past Events</Text>
-      {pastEvents.length === 0
-        ? renderEmptyState('No past events yet.')
-        : pastEvents.map((e) => renderEventCard(e, { showBorder: true }))}
-      <View style={styles.panelBottomSpacer} />
-    </Card>
-  );
+    <>
+      {/* Month navigation — centered */}
+      <View style={styles.pastMonthNav}>
+        <TouchableOpacity onPress={prevPastMonth} activeOpacity={0.7} hitSlop={12}>
+          <Ionicons name="chevron-back" size={22} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowPastMonthPicker(true)} activeOpacity={0.6} style={styles.pastMonthLabelWrapper}>
+          <Text style={styles.pastMonthLabel}>{pastMonthLabel}</Text>
+          <Ionicons name="calendar-outline" size={14} color="rgba(255,255,255,0.8)" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={nextPastMonth} activeOpacity={0.7} hitSlop={12}>
+          <Ionicons name="chevron-forward" size={22} color="#fff" />
+        </TouchableOpacity>
+      </View>
 
-  const renderAll = () => (
-    <Card padded={false} style={styles.panel}>
-      <Text style={styles.panelTitle}>All Events</Text>
-      {events.length === 0
-        ? renderEmptyState('No events yet.')
-        : events.map((e) => renderEventCard(e, { showBorder: true }))}
-      <View style={styles.panelBottomSpacer} />
-    </Card>
+      {/* Events */}
+      {pastEvents.length === 0 ? (
+        renderEmptyState('No past events yet.')
+      ) : pastEventsForSelectedMonth.length === 0 ? (
+        renderEmptyState(`No past events in ${pastMonthLabel}.`)
+      ) : (
+        pastEventsForSelectedMonth.map((e) => renderEventCard(e, { showBorder: true }))
+      )}
+
+      {/* Clear past events button at bottom */}
+      {isCoach && pastEvents.length > 0 && (
+        <TouchableOpacity
+          style={styles.clearPastFooterBtn}
+          activeOpacity={0.7}
+          onPress={() => setShowClearPastEvents(true)}
+        >
+          <Ionicons name="trash-outline" size={16} color="#EF4444" />
+          <Text style={styles.clearPastFooterBtnText}>Clear past events</Text>
+        </TouchableOpacity>
+      )}
+    </>
   );
 
   // ── Main render ───────────────────────────────────────────────────────
@@ -708,10 +825,18 @@ export default function TeamEventsScreen() {
             <Text style={styles.subtitle}>Schedule and upcoming sessions</Text>
           </View>
           {isCoach && (
-            <TouchableOpacity style={styles.createBtn} activeOpacity={0.7} onPress={() => router.push({ pathname: '/team/create-event', params: { teamId } })}>
-              <Ionicons name="add" size={20} color="#fff" />
-              <Text style={styles.createBtnText}>New</Text>
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.createBtn} activeOpacity={0.7} onPress={() => router.push({ pathname: '/team/create-event', params: { teamId } })}>
+                <Ionicons name="add" size={20} color="#fff" />
+                <Text style={styles.createBtnText}>New</Text>
+              </TouchableOpacity>
+              {events.length > 0 && (
+                <TouchableOpacity style={styles.clearAllBtn} activeOpacity={0.7} onPress={() => setShowClearCalendar(true)}>
+                  <Ionicons name="trash-outline" size={16} color="#fff" />
+                  <Text style={styles.clearAllBtnText}>Clear All</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </View>
 
@@ -747,7 +872,6 @@ export default function TeamEventsScreen() {
         )}
         {activeTab === 'week' && renderWeek()}
         {activeTab === 'past' && renderPast()}
-        {activeTab === 'all' && renderAll()}
       </ScrollView>
 
       <Modal
@@ -803,6 +927,219 @@ export default function TeamEventsScreen() {
                   {eventsOnSelectedWeekDay.map((e) => renderModalEventCard(e))}
                 </ScrollView>
               )}
+            </Card>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showClearCalendar}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowClearCalendar(false);
+          setClearConfirmText('');
+        }}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => {
+            setShowClearCalendar(false);
+            setClearConfirmText('');
+          }}
+        >
+          <Pressable style={styles.modalCardWrap} onPress={() => {}}>
+            <Card padded={false} style={[styles.modalCard, styles.clearModalCard]}>
+              <View style={styles.clearModalHeader}>
+                <View style={styles.clearModalWarningIcon}>
+                  <Ionicons name="warning-outline" size={28} color="#EF4444" />
+                </View>
+                <Text style={styles.clearModalTitle}>Clear All Events?</Text>
+                <Text style={styles.clearModalSubtitle}>
+                  This will permanently delete your entire calendar including all current, upcoming, and past events ({events.length} total). This action cannot be undone.
+                </Text>
+              </View>
+
+              <View style={styles.clearModalContent}>
+                <Text style={styles.clearModalLabel}>Type "DELETE" to confirm:</Text>
+                <TextInput
+                  style={styles.clearModalInput}
+                  placeholder="Type DELETE to confirm"
+                  placeholderTextColor="#94A3B8"
+                  value={clearConfirmText}
+                  onChangeText={setClearConfirmText}
+                  editable={!clearing}
+                />
+              </View>
+
+              <View style={styles.clearModalFooter}>
+                <TouchableOpacity
+                  style={styles.clearModalCancelBtn}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setShowClearCalendar(false);
+                    setClearConfirmText('');
+                  }}
+                  disabled={clearing}
+                >
+                  <Text style={styles.clearModalCancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.clearModalConfirmBtn,
+                    clearConfirmText !== 'DELETE' && styles.clearModalConfirmBtnDisabled,
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={handleClearCalendar}
+                  disabled={clearing || clearConfirmText !== 'DELETE'}
+                >
+                  {clearing ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.clearModalConfirmBtnText}>Delete All Events</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Card>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showClearPastEvents}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowClearPastEvents(false);
+          setClearPastConfirmText('');
+        }}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => {
+            setShowClearPastEvents(false);
+            setClearPastConfirmText('');
+          }}
+        >
+          <Pressable style={styles.modalCardWrap} onPress={() => {}}>
+            <Card padded={false} style={[styles.modalCard, styles.clearModalCard]}>
+              <View style={styles.clearModalHeader}>
+                <View style={styles.clearModalWarningIcon}>
+                  <Ionicons name="warning-outline" size={28} color="#F59E0B" />
+                </View>
+                <Text style={styles.clearModalTitle}>Clear Past Events?</Text>
+                <Text style={styles.clearModalSubtitle}>
+                  This will permanently delete {pastEvents.length} past event{pastEvents.length === 1 ? '' : 's'}. This action cannot be undone.
+                </Text>
+              </View>
+
+              <View style={styles.clearModalContent}>
+                <Text style={styles.clearModalLabel}>Type "DELETE" to confirm:</Text>
+                <TextInput
+                  style={styles.clearModalInput}
+                  placeholder="Type DELETE to confirm"
+                  placeholderTextColor="#94A3B8"
+                  value={clearPastConfirmText}
+                  onChangeText={setClearPastConfirmText}
+                  editable={!clearingPast}
+                />
+              </View>
+
+              <View style={styles.clearModalFooter}>
+                <TouchableOpacity
+                  style={styles.clearModalCancelBtn}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setShowClearPastEvents(false);
+                    setClearPastConfirmText('');
+                  }}
+                  disabled={clearingPast}
+                >
+                  <Text style={styles.clearModalCancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.clearModalConfirmBtn,
+                    clearPastConfirmText !== 'DELETE' && styles.clearModalConfirmBtnDisabled,
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={handleClearPastEvents}
+                  disabled={clearingPast || clearPastConfirmText !== 'DELETE'}
+                >
+                  {clearingPast ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.clearModalConfirmBtnText}>Delete Past Events</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Card>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showPastMonthPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPastMonthPicker(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setShowPastMonthPicker(false)}
+        >
+          <Pressable style={styles.modalCardWrap} onPress={() => {}}>
+            <Card padded={false} style={[styles.modalCard, styles.monthPickerCard]}>
+              <View style={styles.monthPickerHeader}>
+                <Text style={styles.monthPickerTitle}>Select Month & Year</Text>
+              </View>
+
+              {/* Year selector */}
+              <View style={styles.yearSelector}>
+                <TouchableOpacity
+                  onPress={() => setPickerYear((y) => y - 1)}
+                  activeOpacity={0.7}
+                  hitSlop={12}
+                >
+                  <Ionicons name="chevron-up" size={28} color={Colors.primary} />
+                </TouchableOpacity>
+                <Text style={styles.yearDisplay}>{pickerYear}</Text>
+                <TouchableOpacity
+                  onPress={() => setPickerYear((y) => y + 1)}
+                  activeOpacity={0.7}
+                  hitSlop={12}
+                >
+                  <Ionicons name="chevron-down" size={28} color={Colors.primary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Month grid — 4 rows × 3 columns */}
+              {[
+                ['Jan', 'Feb', 'Mar'],
+                ['Apr', 'May', 'Jun'],
+                ['Jul', 'Aug', 'Sep'],
+                ['Oct', 'Nov', 'Dec'],
+              ].map((row, rowIdx) => (
+                <View key={rowIdx} style={styles.monthRow}>
+                  {row.map((monthName, colIdx) => {
+                    const idx = rowIdx * 3 + colIdx;
+                    const isActive =
+                      pastEventsMonth.year === pickerYear && pastEventsMonth.month === idx;
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[styles.monthButton, isActive && styles.monthButtonActive]}
+                        activeOpacity={0.7}
+                        onPress={() => handleSelectPastMonth(idx)}
+                      >
+                        <Text style={[styles.monthButtonText, isActive && styles.monthButtonTextActive]}>
+                          {monthName}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
             </Card>
           </Pressable>
         </Pressable>
@@ -873,21 +1210,44 @@ const styles = StyleSheet.create({
     fontFamily: UI.typography.medium,
     marginTop: 2,
   },
-  createBtn: {
+  headerActions: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+  },
+  clearAllBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#EF4444',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  clearAllBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: UI.typography.bold,
+  },
+  createBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     backgroundColor: 'rgba(255,255,255,0.14)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
     borderRadius: 18,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    marginTop: 4,
   },
   createBtnText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
     fontFamily: UI.typography.bold,
   },
@@ -933,6 +1293,45 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 20,
     fontWeight: '800',
+    fontFamily: UI.typography.bold,
+  },
+  pastMonthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  pastMonthLabelWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  pastMonthLabel: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '800',
+    fontFamily: UI.typography.bold,
+  },
+  clearPastFooterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  clearPastFooterBtnText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '700',
     fontFamily: UI.typography.bold,
   },
 
@@ -1343,5 +1742,157 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     fontFamily: UI.typography.bold,
+  },
+
+  // ── Clear Calendar Modal ───────────────────────────────────────────────
+  clearModalCard: {
+    minHeight: 0,
+  },
+  clearModalHeader: {
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  clearModalWarningIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearModalTitle: {
+    color: Colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: UI.typography.bold,
+    textAlign: 'center',
+  },
+  clearModalSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: UI.typography.medium,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  clearModalContent: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  clearModalLabel: {
+    color: Colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: UI.typography.medium,
+  },
+  clearModalInput: {
+    borderWidth: 1,
+    borderColor: Colors.borderSoft,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontFamily: UI.typography.medium,
+  },
+  clearModalFooter: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'flex-end',
+  },
+  clearModalCancelBtn: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearModalCancelBtnText: {
+    color: Colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: UI.typography.bold,
+  },
+  clearModalConfirmBtn: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearModalConfirmBtnDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  clearModalConfirmBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: UI.typography.bold,
+  },
+
+  // ── Month Picker Modal ─────────────────────────────────────────────────
+  monthPickerCard: {
+    minHeight: 0,
+    maxHeight: '95%',
+    paddingVertical: 20,
+  },
+  monthPickerHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  monthPickerTitle: {
+    color: Colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: UI.typography.bold,
+  },
+  yearSelector: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 0,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+  },
+  yearDisplay: {
+    color: Colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: UI.typography.bold,
+    marginVertical: 4,
+  },
+  monthRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  monthButton: {
+    flex: 1,
+    marginHorizontal: 4,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthButtonActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  monthButtonText: {
+    color: Colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: UI.typography.bold,
+  },
+  monthButtonTextActive: {
+    color: '#fff',
   },
 });
