@@ -24,13 +24,6 @@ export default function TabsLayout() {
           headerShown: true,
         }}
       />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          headerShown: true,
-        }}
-      />
     </Tabs>
   );
 }

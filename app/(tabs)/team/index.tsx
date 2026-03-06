@@ -215,9 +215,16 @@ export default function TeamScreen() {
                 {getGreeting()}{firstName ? `, ${firstName}` : ''}!
               </Text>
             </View>
-            <View style={styles.avatar}>
+            <TouchableOpacity
+              style={styles.avatar}
+              onPress={() => router.push('/team/profile')}
+              activeOpacity={0.8}
+            >
               <Text style={styles.avatarText}>{initials}</Text>
-            </View>
+              <View style={styles.avatarBadge}>
+                <Ionicons name="settings-outline" size={10} color="#fff" />
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -429,6 +436,19 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
     fontFamily: UI.typography.bold,
+  },
+  avatarBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   footer: {
     paddingHorizontal: 24,

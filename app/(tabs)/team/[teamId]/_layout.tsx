@@ -12,7 +12,6 @@ type TabIconName =
   | 'grid-outline'
   | 'calendar-outline'
   | 'people-outline'
-  | 'person-outline'
   | 'settings-outline';
 
 type TabIconConfig = {
@@ -25,7 +24,6 @@ const TAB_ICONS: Record<string, TabIconConfig> = {
   events: { lib: 'ion', name: 'calendar-outline' },
   roster: { lib: 'ion', name: 'people-outline' },
   lineups: { lib: 'mci', name: 'soccer-field' },
-  profile: { lib: 'ion', name: 'person-outline' },
   settings: { lib: 'ion', name: 'settings-outline' },
 };
 
@@ -163,7 +161,6 @@ export default function TeamDetailLayout() {
       <Tabs.Screen name="lineups" options={{ title: 'Lineups' }} />
       <Tabs.Screen name="events" options={{ title: 'Events' }} />
       <Tabs.Screen name="roster" options={{ title: 'Roster' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
       <Tabs.Screen
         name="TeamTabPlaceholder"

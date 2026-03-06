@@ -462,7 +462,14 @@ export default function LineupBuilderScreen() {
         status === 'published' ? 'Lineup Published' : 'Draft Saved',
         lineupTitle,
       );
-      router.back();
+      if (status === 'published') {
+        router.replace({
+          pathname: '/team/lineup-view',
+          params: { teamId, lineupId: lineupRecord.id },
+        });
+      } else {
+        router.back();
+      }
     } catch (err: any) {
       console.error('Error saving lineup:', err);
       showToast('error', 'Failed to save', err.message);

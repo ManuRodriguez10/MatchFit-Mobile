@@ -14,7 +14,8 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import { useGlobalSearchParams, router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -234,8 +235,9 @@ function EditableInfoRow({ icon, label, value, editing, onChangeText, placeholde
 }
 
 export default function TeamProfileScreen() {
-  const { teamId } = useGlobalSearchParams<{ teamId: string }>();
+  const insets = useSafeAreaInsets();
   const { profile, user, signOut, refreshProfile } = useAuth();
+  const [teamId, setTeamId] = useState<string | null>(null);
 
   const [refreshing, setRefreshing] = useState(false);
   const [teamRole, setTeamRole] = useState<string | null>(null);
@@ -290,15 +292,43 @@ export default function TeamProfileScreen() {
   }, [profile]);
 
   const loadTeamData = useCallback(async () => {
-    if (!teamId || !user) return;
+    if (!user) return;
 
     syncFormFromProfile();
+
+    // Resolve teamId dynamically from the user's memberships
+    let resolvedTeamId = teamId;
+    if (!resolvedTeamId) {
+      if (isCoach) {
+        const { data: coachTeam } = await supabase
+          .from('team_coaches')
+          .select('team_id')
+          .eq('coach_id', user.id)
+          .limit(1)
+          .maybeSingle();
+        resolvedTeamId = coachTeam?.team_id ?? null;
+      } else {
+        const { data: playerTeam } = await supabase
+          .from('team_players')
+          .select('team_id')
+          .eq('player_id', user.id)
+          .limit(1)
+          .maybeSingle();
+        resolvedTeamId = playerTeam?.team_id ?? null;
+      }
+      if (resolvedTeamId) setTeamId(resolvedTeamId);
+    }
+
+    if (!resolvedTeamId) {
+      setRefreshing(false);
+      return;
+    }
 
     if (isCoach) {
       const { data } = await supabase
         .from('team_coaches')
         .select('role')
-        .eq('team_id', teamId)
+        .eq('team_id', resolvedTeamId)
         .eq('coach_id', user.id)
         .single();
       if (data) setTeamRole(data.role === 'head_coach' ? 'Head Coach' : 'Assistant Coach');
@@ -306,7 +336,7 @@ export default function TeamProfileScreen() {
       const { data } = await supabase
         .from('team_players')
         .select('jersey_number, positions')
-        .eq('team_id', teamId)
+        .eq('team_id', resolvedTeamId)
         .eq('player_id', user.id)
         .single();
       if (data) {
@@ -547,6 +577,21 @@ export default function TeamProfileScreen() {
     >
       <View style={styles.decorCircle1} />
       <View style={styles.decorCircle2} />
+
+      {/* Header */}
+      <View style={[styles.headerBar, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={22} color="#fff" />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <GradientText
+            text="Profile"
+            style={styles.headerTitle}
+            colors={['#FFFFFF', '#D4EBFC']}
+          />
+        </View>
+        <View style={{ width: 36 }} />
+      </View>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -1059,6 +1104,29 @@ export default function TeamProfileScreen() {
 
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: UI.typography.bold,
+    color: '#fff',
+  },
   decorCircle1: {
     position: 'absolute', width: 300, height: 300, borderRadius: 150,
     backgroundColor: 'rgba(255,255,255,0.05)', top: -80, right: -60,
@@ -1068,7 +1136,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)', bottom: 120, left: -40,
   },
   content: {
-    paddingTop: 100, paddingHorizontal: 20, paddingBottom: 120, gap: 16,
+    paddingTop: 16, paddingHorizontal: 20, paddingBottom: 120, gap: 16,
   },
 
   // Avatar section
