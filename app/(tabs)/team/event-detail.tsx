@@ -51,9 +51,8 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
 };
 
 const RSVP_CONFIG: Record<string, { label: string; icon: string; color: string; bg: string }> = {
-  going: { label: 'Going', icon: 'checkmark-circle', color: '#10B981', bg: '#D1FAE5' },
-  not_going: { label: 'Not Going', icon: 'close-circle', color: '#EF4444', bg: '#FEE2E2' },
-  maybe: { label: 'Maybe', icon: 'help-circle', color: '#F59E0B', bg: '#FEF3C7' },
+  going: { label: 'Yes', icon: 'checkmark-circle', color: '#10B981', bg: '#D1FAE5' },
+  not_going: { label: 'No', icon: 'close-circle', color: '#EF4444', bg: '#FEE2E2' },
 };
 
 function formatDisplayDate(isoDate: string): string {
@@ -86,6 +85,7 @@ export default function EventDetailScreen() {
   const [myRsvp, setMyRsvp] = useState<RsvpStatus | null>(null);
   const [rsvpLoading, setRsvpLoading] = useState(false);
   const [totalPlayers, setTotalPlayers] = useState(0);
+  const [noResponsePlayers, setNoResponsePlayers] = useState<{ id: string; name: string }[]>([]);
 
   const fetchData = useCallback(async () => {
     if (!eventId) { setLoading(false); return; }
@@ -101,10 +101,10 @@ export default function EventDetailScreen() {
       if (eventData) {
         setEvent(eventData as EventDetail);
 
-        // Fetch total players on the team
-        const { count } = await supabase
+        // Fetch all team players with names
+        const { data: allPlayers, count } = await supabase
           .from('team_players')
-          .select('id', { count: 'exact', head: true })
+          .select('player_id, profiles:player_id(full_name)', { count: 'exact' })
           .eq('team_id', eventData.team_id);
         setTotalPlayers(count || 0);
 
@@ -121,6 +121,20 @@ export default function EventDetailScreen() {
           playerName: r.profiles?.full_name || 'Unknown',
         }));
         setRsvps(mapped);
+
+        // Build no-response list (players who haven't RSVPed)
+        if (allPlayers && eventData.event_type !== 'practice') {
+          const respondedIds = new Set(mapped.map(r => r.player_id));
+          const noResponse = (allPlayers as any[])
+            .filter(p => !respondedIds.has(p.player_id))
+            .map(p => ({
+              id: p.player_id,
+              name: p.profiles?.full_name || 'Unknown',
+            }));
+          setNoResponsePlayers(noResponse);
+        } else {
+          setNoResponsePlayers([]);
+        }
 
         // Find my RSVP
         if (user) {
@@ -167,9 +181,15 @@ export default function EventDetailScreen() {
 
   const handleRsvp = async (status: RsvpStatus) => {
     if (!user || !eventId) return;
+    const playerName = profile?.full_name || 'Unknown';
 
     // Toggle off if tapping same status
     if (myRsvp === status) {
+      const prevRsvp = myRsvp;
+      const prevRsvps = rsvps;
+      // Optimistic update
+      setMyRsvp(null);
+      setRsvps(prev => prev.filter(r => r.player_id !== user.id));
       setRsvpLoading(true);
       try {
         await supabase
@@ -177,15 +197,26 @@ export default function EventDetailScreen() {
           .delete()
           .eq('event_id', eventId)
           .eq('player_id', user.id);
-        setMyRsvp(null);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } catch {
+        // Revert on failure
+        setMyRsvp(prevRsvp);
+        setRsvps(prevRsvps);
         showToast('error', 'Failed to update RSVP');
       } finally {
         setRsvpLoading(false);
       }
       return;
     }
+
+    const prevRsvp = myRsvp;
+    const prevRsvps = rsvps;
+    // Optimistic update
+    setMyRsvp(status);
+    setRsvps(prev => {
+      const withoutMine = prev.filter(r => r.player_id !== user.id);
+      return [...withoutMine, { id: `optimistic-${user.id}`, player_id: user.id, status, playerName }];
+    });
 
     setRsvpLoading(true);
     try {
@@ -202,10 +233,12 @@ export default function EventDetailScreen() {
 
       if (error) throw error;
 
-      setMyRsvp(status);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast('success', `RSVP: ${RSVP_CONFIG[status].label}`);
     } catch {
+      // Revert on failure
+      setMyRsvp(prevRsvp);
+      setRsvps(prevRsvps);
       showToast('error', 'Failed to update RSVP');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
@@ -241,7 +274,6 @@ export default function EventDetailScreen() {
 
   const goingCount = rsvps.filter(r => r.status === 'going').length;
   const notGoingCount = rsvps.filter(r => r.status === 'not_going').length;
-  const maybeCount = rsvps.filter(r => r.status === 'maybe').length;
   const noResponseCount = totalPlayers - rsvps.length;
 
   return (
@@ -351,12 +383,12 @@ export default function EventDetailScreen() {
           )}
         </Card>
 
-        {/* RSVP Section — Players */}
-        {!isCoach && (
+        {/* RSVP Section — Players (only for upcoming games, meetings, tournaments) */}
+        {!isCoach && event && event.event_type !== 'practice' && new Date(`${event.date}T23:59:59`) >= new Date() && (
           <Card style={styles.rsvpCard}>
             <Text style={styles.rsvpTitle}>Your RSVP</Text>
             <View style={styles.rsvpBtnRow}>
-              {(['going', 'not_going', 'maybe'] as RsvpStatus[]).map(status => {
+              {(['going', 'not_going'] as RsvpStatus[]).map(status => {
                 const cfg = RSVP_CONFIG[status];
                 const isActive = myRsvp === status;
                 return (
@@ -390,51 +422,65 @@ export default function EventDetailScreen() {
           </Card>
         )}
 
-        {/* RSVP Summary — visible to everyone */}
-        <Card style={styles.rsvpCard}>
-          <Text style={styles.rsvpTitle}>Attendance</Text>
-          <View style={styles.rsvpSummaryRow}>
-            <View style={styles.rsvpStat}>
-              <View style={[styles.rsvpStatDot, { backgroundColor: '#10B981' }]} />
-              <Text style={styles.rsvpStatNum}>{goingCount}</Text>
-              <Text style={styles.rsvpStatLabel}>Going</Text>
+        {/* RSVP Summary — visible to everyone (not for practices) */}
+        {event.event_type !== 'practice' && (
+          <Card style={styles.rsvpCard}>
+            <Text style={styles.rsvpTitle}>Attendance</Text>
+            <View style={styles.rsvpSummaryRow}>
+              <View style={styles.rsvpStat}>
+                <View style={[styles.rsvpStatDot, { backgroundColor: '#10B981' }]} />
+                <Text style={styles.rsvpStatNum}>{goingCount}</Text>
+                <Text style={styles.rsvpStatLabel}>Yes</Text>
+              </View>
+              <View style={styles.rsvpStat}>
+                <View style={[styles.rsvpStatDot, { backgroundColor: '#EF4444' }]} />
+                <Text style={styles.rsvpStatNum}>{notGoingCount}</Text>
+                <Text style={styles.rsvpStatLabel}>No</Text>
+              </View>
+              <View style={styles.rsvpStat}>
+                <View style={[styles.rsvpStatDot, { backgroundColor: Colors.textMuted }]} />
+                <Text style={styles.rsvpStatNum}>{noResponseCount < 0 ? 0 : noResponseCount}</Text>
+                <Text style={styles.rsvpStatLabel}>Pending</Text>
+              </View>
             </View>
-            <View style={styles.rsvpStat}>
-              <View style={[styles.rsvpStatDot, { backgroundColor: '#F59E0B' }]} />
-              <Text style={styles.rsvpStatNum}>{maybeCount}</Text>
-              <Text style={styles.rsvpStatLabel}>Maybe</Text>
-            </View>
-            <View style={styles.rsvpStat}>
-              <View style={[styles.rsvpStatDot, { backgroundColor: '#EF4444' }]} />
-              <Text style={styles.rsvpStatNum}>{notGoingCount}</Text>
-              <Text style={styles.rsvpStatLabel}>Can't Go</Text>
-            </View>
-            <View style={styles.rsvpStat}>
-              <View style={[styles.rsvpStatDot, { backgroundColor: Colors.textMuted }]} />
-              <Text style={styles.rsvpStatNum}>{noResponseCount < 0 ? 0 : noResponseCount}</Text>
-              <Text style={styles.rsvpStatLabel}>Pending</Text>
-            </View>
-          </View>
 
-          {/* RSVP list for coaches */}
-          {isCoach && rsvps.length > 0 && (
-            <>
-              <View style={styles.divider} />
-              {rsvps.map(r => {
-                const cfg = RSVP_CONFIG[r.status] || RSVP_CONFIG.maybe;
-                return (
-                  <View key={r.id} style={styles.rsvpPlayerRow}>
-                    <Text style={styles.rsvpPlayerName} numberOfLines={1}>{r.playerName}</Text>
-                    <View style={[styles.rsvpPlayerBadge, { backgroundColor: cfg.bg }]}>
-                      <Ionicons name={cfg.icon as any} size={14} color={cfg.color} />
-                      <Text style={[styles.rsvpPlayerBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
+            {/* RSVP list for coaches */}
+            {isCoach && rsvps.length > 0 && (
+              <>
+                <View style={styles.divider} />
+                {rsvps.map(r => {
+                  const cfg = RSVP_CONFIG[r.status] || RSVP_CONFIG.not_going;
+                  return (
+                    <View key={r.id} style={styles.rsvpPlayerRow}>
+                      <Text style={styles.rsvpPlayerName} numberOfLines={1}>{r.playerName}</Text>
+                      <View style={[styles.rsvpPlayerBadge, { backgroundColor: cfg.bg }]}>
+                        <Ionicons name={cfg.icon as any} size={14} color={cfg.color} />
+                        <Text style={[styles.rsvpPlayerBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </>
+            )}
+
+            {/* No Response list for coaches */}
+            {isCoach && noResponsePlayers.length > 0 && (
+              <>
+                <View style={styles.divider} />
+                <Text style={styles.noResponseTitle}>No Response ({noResponsePlayers.length})</Text>
+                {noResponsePlayers.map(p => (
+                  <View key={p.id} style={styles.rsvpPlayerRow}>
+                    <Text style={styles.rsvpPlayerName} numberOfLines={1}>{p.name}</Text>
+                    <View style={[styles.rsvpPlayerBadge, { backgroundColor: '#F1F5F9' }]}>
+                      <Ionicons name="remove-circle-outline" size={14} color={Colors.textMuted} />
+                      <Text style={[styles.rsvpPlayerBadgeText, { color: Colors.textMuted }]}>No Response</Text>
                     </View>
                   </View>
-                );
-              })}
-            </>
-          )}
-        </Card>
+                ))}
+              </>
+            )}
+          </Card>
+        )}
 
         {/* Edit button — coaches only, hide for past events */}
         {isCoach && event.date >= new Date().toISOString().slice(0, 10) && (
@@ -561,6 +607,9 @@ const styles = StyleSheet.create({
     fontSize: 11, fontFamily: UI.typography.bold,
   },
 
+  noResponseTitle: {
+    fontSize: 14, fontFamily: UI.typography.bold, color: Colors.textSecondary, marginBottom: 2,
+  },
   editBtnWrap: { marginTop: 4 },
   editBtn: {
     backgroundColor: '#FFFFFF',

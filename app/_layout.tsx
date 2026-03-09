@@ -41,7 +41,7 @@ function RootLayoutNav() {
     // Wait until profile is loaded before making routing decisions
     if (!profile) return;
 
-    console.log('[ROUTING] user:', user.email, '| role:', profile.role, '| onboarding_complete:', profile.onboarding_complete);
+    if (__DEV__) console.log('[ROUTING] user:', user.email, '| role:', profile.role, '| onboarding_complete:', profile.onboarding_complete);
 
     const needsOnboarding = !profile.onboarding_complete &&
       (profile.role === 'coach' || profile.role === 'athlete');
@@ -62,7 +62,7 @@ function RootLayoutNav() {
               .eq('player_id', user.id)
               .limit(1);
 
-            console.log('[ROUTING] team_players query:', JSON.stringify({ memberships, memberErr }));
+            if (__DEV__) console.log('[ROUTING] team_players query:', JSON.stringify({ memberships, memberErr }));
 
             const membership = memberships?.[0];
             if (membership?.team_id) {
@@ -85,7 +85,7 @@ function RootLayoutNav() {
               .eq('coach_id', user.id)
               .limit(1);
 
-            console.log('[ROUTING] team_coaches query:', JSON.stringify({ coachTeams, coachErr }));
+            if (__DEV__) console.log('[ROUTING] team_coaches query:', JSON.stringify({ coachTeams, coachErr }));
 
             const coachTeam = coachTeams?.[0];
             if (coachTeam?.team_id) {
@@ -115,7 +115,7 @@ function RootLayoutNav() {
             }
           }
         } catch (err) {
-          console.error('[ROUTING] team check error:', err);
+          if (__DEV__) console.error('[ROUTING] team check error:', err);
           // Fallback to default onboarding entry if query fails
           if (profile.role === 'athlete') {
             router.replace('/(onboarding)/player-join-team');

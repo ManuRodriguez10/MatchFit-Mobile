@@ -86,7 +86,7 @@ export default function TeamScreen() {
         const { data, error } = await withRetry(
           () => supabase
             .from('team_coaches')
-            .select('role, team:teams(id, name, invite_code)')
+            .select('role, team:teams(id, name, invite_code, created_by)')
             .eq('coach_id', user.id),
           { message: 'Timed out while loading teams.' },
         );
@@ -95,20 +95,30 @@ export default function TeamScreen() {
 
         const rows = (data ?? []).filter(
           (row) => row.team != null,
-        ) as { role: string; team: { id: string; name: string; invite_code: string } }[];
+        ) as { role: string; team: { id: string; name: string; invite_code: string; created_by: string } }[];
 
         if (rows.length > 0) {
-          const counts = await withRetry(
-            () => Promise.all(
-              rows.map((row) =>
-                Promise.all([
-                  supabase.from('team_coaches').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
-                  supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
-                ]),
+          // Fetch member counts and owner names in parallel
+          const ownerIds = [...new Set(rows.map(r => r.team.created_by))];
+          const [counts, ownerResult] = await withRetry(
+            () => Promise.all([
+              Promise.all(
+                rows.map((row) =>
+                  Promise.all([
+                    supabase.from('team_coaches').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
+                    supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
+                  ]),
+                ),
               ),
-            ),
+              supabase.from('profiles').select('id, full_name').in('id', ownerIds),
+            ]),
             { message: 'Timed out while loading team members.' },
           );
+
+          const ownerMap = new Map<string, string>();
+          for (const owner of (ownerResult.data ?? [])) {
+            ownerMap.set(owner.id, owner.full_name);
+          }
 
           for (let i = 0; i < rows.length; i++) {
             const { team, role } = rows[i];
@@ -119,6 +129,7 @@ export default function TeamScreen() {
               inviteCode: team.invite_code,
               memberCount: (coachRes.count ?? 0) + (playerRes.count ?? 0),
               userRole: role as CoachRole,
+              ownerName: ownerMap.get(team.created_by) ?? 'Unknown',
             });
           }
         }
@@ -234,8 +245,8 @@ export default function TeamScreen() {
           colors={['#FFFFFF', '#D4EBFC']}
         />
 
-        {isCoach && (
-          <View style={styles.actionRow}>
+        <View style={styles.actionRow}>
+          {isCoach && (
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => router.push('/team/create')}
@@ -244,16 +255,16 @@ export default function TeamScreen() {
               <Ionicons name="add-circle-outline" size={16} color="#fff" />
               <Text style={styles.actionText}>Create Team</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => router.push('/team/join')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="enter-outline" size={16} color="#fff" />
-              <Text style={styles.actionText}>Join Team</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          )}
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => router.push('/team/join')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="enter-outline" size={16} color="#fff" />
+            <Text style={styles.actionText}>Join Team</Text>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
 
       {/* Content */}
@@ -324,6 +335,7 @@ export default function TeamScreen() {
                 memberCount={team.memberCount}
                 userRole={team.userRole}
                 inviteCode={team.inviteCode}
+                ownerName={team.ownerName}
                 onPress={() => router.push(`/team/${team.teamId}`)}
               />
             </Animated.View>

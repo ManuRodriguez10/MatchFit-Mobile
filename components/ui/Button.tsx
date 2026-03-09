@@ -59,7 +59,7 @@ export default function Button({
   const renderContent = () => (
     <>
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? Colors.textOnDark : Colors.textPrimary} size="small" />
+        <ActivityIndicator color={Colors.textOnDark} size="small" />
       ) : (
         <Text style={[styles.text, textStyle]}>{title}</Text>
       )}
@@ -151,9 +151,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   outlineContainer: {
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderWidth: 0,
+    backgroundColor: Colors.primary,
     paddingVertical: 14,
     paddingHorizontal: 22,
     alignItems: 'center',

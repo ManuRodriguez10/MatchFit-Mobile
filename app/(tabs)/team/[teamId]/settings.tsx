@@ -58,6 +58,7 @@ export default function TeamSettingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isHeadCoach, setIsHeadCoach] = useState(false);
+  const [isTeamCreator, setIsTeamCreator] = useState(false);
 
   // Coach invite state
   const [coachInvite, setCoachInvite] = useState<ActiveCoachInvite | null>(null);
@@ -77,8 +78,18 @@ export default function TeamSettingsScreen() {
     if (data) {
       setTeamName(data.name);
       setInviteCode(data.invite_code);
-      setIsHeadCoach(data.created_by === user?.id);
+      setIsTeamCreator(data.created_by === user?.id);
     }
+
+    // Check if the current user is a head coach for this team
+    const { data: coachRecord } = await supabase
+      .from('team_coaches')
+      .select('role')
+      .eq('team_id', teamId)
+      .eq('coach_id', user?.id)
+      .maybeSingle();
+
+    setIsHeadCoach(coachRecord?.role === 'head_coach');
 
     // Always start with no active coach invite — coach must generate a fresh one each session
     setCoachInvite(null);
@@ -205,7 +216,7 @@ export default function TeamSettingsScreen() {
   const handleTransferOwnership = (targetCoach: { id: string; coach_id: string; name: string }) => {
     Alert.alert(
       'Transfer Ownership',
-      `Make ${targetCoach.name} the new head coach? You will become an assistant coach.`,
+      `Transfer team ownership to ${targetCoach.name}? They will become the team creator. You will remain a head coach.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -213,31 +224,79 @@ export default function TeamSettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Demote current head coach to assistant
-              await supabase
-                .from('team_coaches')
-                .update({ role: 'assistant_coach' })
-                .eq('team_id', teamId)
-                .eq('coach_id', user!.id);
-
-              // Promote target to head coach
-              await supabase
-                .from('team_coaches')
-                .update({ role: 'head_coach' })
-                .eq('id', targetCoach.id);
-
-              // Update teams.created_by
+              // Update teams.created_by to transfer ownership
               await supabase
                 .from('teams')
                 .update({ created_by: targetCoach.coach_id })
                 .eq('id', teamId);
 
+              // Make sure the target is a head coach
+              await supabase
+                .from('team_coaches')
+                .update({ role: 'head_coach' })
+                .eq('id', targetCoach.id);
+
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              showToast('success', `${targetCoach.name} is now head coach`);
-              setIsHeadCoach(false);
+              showToast('success', `Ownership transferred to ${targetCoach.name}`);
+              setIsTeamCreator(false);
               loadTeam();
             } catch {
               showToast('error', 'Failed to transfer ownership');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePromoteCoach = (coach: { id: string; name: string }) => {
+    Alert.alert(
+      'Promote to Head Coach',
+      `Promote ${coach.name} to Head Coach? They will have full team management privileges.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Promote',
+          onPress: async () => {
+            try {
+              await supabase
+                .from('team_coaches')
+                .update({ role: 'head_coach' })
+                .eq('id', coach.id);
+
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showToast('success', `${coach.name} promoted to Head Coach`);
+              loadTeam();
+            } catch {
+              showToast('error', 'Failed to promote coach');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDemoteCoach = (coach: { id: string; name: string }) => {
+    Alert.alert(
+      'Demote to Assistant Coach',
+      `Demote ${coach.name} to Assistant Coach? They will have limited privileges.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Demote',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase
+                .from('team_coaches')
+                .update({ role: 'assistant_coach' })
+                .eq('id', coach.id);
+
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showToast('success', `${coach.name} demoted to Assistant Coach`);
+              loadTeam();
+            } catch {
+              showToast('error', 'Failed to demote coach');
             }
           },
         },
@@ -627,13 +686,33 @@ export default function TeamSettingsScreen() {
                     </View>
                   </View>
                   <View style={styles.coachRowActions}>
-                    <TouchableOpacity
-                      onPress={() => handleTransferOwnership(coach)}
-                      style={styles.coachActionBtn}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="swap-horizontal-outline" size={16} color={Colors.primary} />
-                    </TouchableOpacity>
+                    {coach.role === 'assistant_coach' ? (
+                      <TouchableOpacity
+                        onPress={() => handlePromoteCoach(coach)}
+                        style={styles.coachActionBtn}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="arrow-up-circle-outline" size={16} color={Colors.emerald} />
+                      </TouchableOpacity>
+                    ) : isTeamCreator ? (
+                      <TouchableOpacity
+                        onPress={() => handleDemoteCoach(coach)}
+                        style={styles.coachActionBtn}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="arrow-down-circle-outline" size={16} color={Colors.amber} />
+                      </TouchableOpacity>
+                    ) : null}
+                    {isTeamCreator && (
+                      <TouchableOpacity
+                        onPress={() => handleTransferOwnership(coach)}
+                        style={styles.coachActionBtn}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="swap-horizontal-outline" size={16} color={Colors.primary} />
+                      </TouchableOpacity>
+                    )}
+                    {(coach.role === 'assistant_coach' || isTeamCreator) && (
                     <TouchableOpacity
                       onPress={() => handleRemoveCoach(coach)}
                       style={styles.coachActionBtn}
@@ -641,14 +720,15 @@ export default function TeamSettingsScreen() {
                     >
                       <Ionicons name="person-remove-outline" size={16} color={Colors.red} />
                     </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               ))}
           </Card>
         )}
 
-        {/* Danger Zone */}
-        {isHeadCoach && (
+        {/* Danger Zone — only the original team creator can delete */}
+        {isTeamCreator && (
           <Card style={[styles.card, styles.dangerCard]}>
             <View style={styles.cardHeader}>
               <View style={[styles.cardIconWrap, { backgroundColor: Colors.redSoft }]}>

@@ -64,6 +64,7 @@ export default function OnboardingJoinTeamScreen() {
         .limit(1)
         .maybeSingle();
 
+
       if (coachInvite) {
         // Coach invite code found — join with the specified role
         const { data: existingCoach } = await supabase
@@ -99,7 +100,7 @@ export default function OnboardingJoinTeamScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.replace({
           pathname: '/(onboarding)/coach-profile',
-          params: { teamId: coachInvite.team_id },
+          params: { teamId: coachInvite.team_id, joining: 'true' },
         });
         return;
       }

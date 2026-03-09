@@ -463,7 +463,7 @@ export default function TeamEventsScreen() {
             <Text style={styles.metaText}>{event.location}</Text>
           </View>
         ) : null}
-        {(event.rsvpTotal ?? 0) > 0 && (
+        {event.event_type !== 'practice' && (event.rsvpTotal ?? 0) > 0 && (
           <View style={styles.metaRow}>
             <Ionicons name="people-outline" size={12} color="#64748B" />
             <Text style={styles.metaText}>
@@ -471,7 +471,7 @@ export default function TeamEventsScreen() {
             </Text>
           </View>
         )}
-        {event.lineupStatus && (
+        {event.lineupStatus && (isCoach || event.lineupStatus === 'published') && (
           <View style={styles.metaRow}>
             <Ionicons
               name={event.lineupStatus === 'published' ? 'checkmark-circle-outline' : 'document-text-outline'}
@@ -538,7 +538,7 @@ export default function TeamEventsScreen() {
               </Text>
             </View>
           )}
-          {event.lineupStatus && (
+          {event.lineupStatus && (isCoach || event.lineupStatus === 'published') && (
             <View style={styles.metaRow}>
               <Ionicons
                 name={event.lineupStatus === 'published' ? 'checkmark-circle-outline' : 'document-text-outline'}

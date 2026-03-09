@@ -140,4 +140,5 @@ export interface TeamWithUserRole {
   inviteCode: string;
   memberCount: number;
   userRole: CoachRole | 'player';
+  ownerName?: string;
 }

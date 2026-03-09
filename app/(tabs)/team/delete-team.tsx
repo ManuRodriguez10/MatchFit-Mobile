@@ -71,25 +71,17 @@ export default function DeleteTeamScreen() {
             try {
               setDeleting(true);
 
-              const { data: lineupRows } = await supabase
-                .from('lineups')
-                .select('id')
-                .eq('team_id', teamId);
-              const lineupIds = (lineupRows ?? []).map((row: { id: string }) => row.id);
+              const { error } = await supabase.rpc('delete_team_cascade', {
+                p_team_id: teamId,
+              });
 
-              if (lineupIds.length > 0) {
-                await supabase.from('lineup_players').delete().in('lineup_id', lineupIds);
-              }
-              await supabase.from('lineups').delete().eq('team_id', teamId);
-              await supabase.from('events').delete().eq('team_id', teamId);
-              await supabase.from('team_players').delete().eq('team_id', teamId);
-              await supabase.from('team_coaches').delete().eq('team_id', teamId);
-              await supabase.from('teams').delete().eq('id', teamId);
+              if (error) throw error;
 
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
               showToast('success', 'Team deleted');
               router.replace('/(tabs)/team');
-            } catch {
+            } catch (err) {
+              if (__DEV__) console.error('Team deletion failed:', err);
               showToast('error', 'Failed to delete team');
             } finally {
               setDeleting(false);

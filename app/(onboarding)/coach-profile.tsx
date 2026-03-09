@@ -90,7 +90,7 @@ const COUNTRY_CODES = [
 
 export default function CoachProfileOnboardingScreen() {
   const { user, profile, completeOnboarding } = useAuth();
-  const { inviteCode, teamName } = useLocalSearchParams<{ inviteCode?: string; teamName?: string }>();
+  const { inviteCode, teamName, joining } = useLocalSearchParams<{ inviteCode?: string; teamName?: string; joining?: string }>();
 
   const [nationality, setNationality] = useState(profile?.nationality ?? '');
   const [phone, setPhone] = useState('');
@@ -157,7 +157,7 @@ export default function CoachProfileOnboardingScreen() {
 
       if (updateError) throw updateError;
 
-      if (inviteCode) {
+      if (inviteCode && !joining) {
         router.replace({
           pathname: '/(onboarding)/invite-code',
           params: {

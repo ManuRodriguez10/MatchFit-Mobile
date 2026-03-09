@@ -50,6 +50,65 @@ export default function JoinTeamScreen() {
     setGeneralError('');
 
     try {
+      const cleanedCode = inviteCode.trim().toUpperCase();
+      const now = new Date().toISOString();
+
+      // 1. Check coach_invites first (one-time coach codes)
+      const { data: coachInvite } = await supabase
+        .from('coach_invites')
+        .select('id, team_id, invited_role')
+        .eq('code', cleanedCode)
+        .eq('used', false)
+        .gt('expires_at', now)
+        .limit(1)
+        .maybeSingle();
+
+      if (coachInvite) {
+        const { data: existingCoach } = await supabase
+          .from('team_coaches')
+          .select('id')
+          .eq('team_id', coachInvite.team_id)
+          .eq('coach_id', user!.id)
+          .maybeSingle();
+
+        if (existingCoach) {
+          setGeneralError("You're already a coach on this team.");
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
+        }
+
+        const coachRole = coachInvite.invited_role === 'head_coach' ? 'head_coach' : 'assistant_coach';
+
+        const { error: joinError } = await supabase
+          .from('team_coaches')
+          .insert({
+            team_id: coachInvite.team_id,
+            coach_id: user!.id,
+            role: coachRole,
+          });
+
+        if (joinError) throw joinError;
+
+        // Mark invite as used
+        await supabase
+          .from('coach_invites')
+          .update({ used: true })
+          .eq('id', coachInvite.id);
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+        // Fetch team name for success state
+        const { data: teamData } = await supabase
+          .from('teams')
+          .select('name')
+          .eq('id', coachInvite.team_id)
+          .single();
+
+        setJoinedTeamName(teamData?.name ?? 'your new team');
+        return;
+      }
+
+      // 2. Fall back to team player invite code
       const lookup = await lookupTeamByInviteCode(inviteCode);
       if (!lookup.ok) {
         if (lookup.reason === 'invalid_code') {

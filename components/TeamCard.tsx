@@ -13,6 +13,7 @@ interface TeamCardProps {
   memberCount: number;
   userRole: CoachRole | 'player';
   inviteCode?: string;
+  ownerName?: string;
   onPress: () => void;
 }
 
@@ -39,6 +40,7 @@ export default function TeamCard({
   memberCount,
   userRole,
   inviteCode,
+  ownerName,
   onPress,
 }: TeamCardProps) {
   const isCoach = userRole === 'head_coach' || userRole === 'assistant_coach';
@@ -86,6 +88,13 @@ export default function TeamCard({
             </View>
           ) : null}
         </View>
+
+        {ownerName ? (
+          <View style={styles.ownerRow}>
+            <Ionicons name="person-circle-outline" size={14} color={Colors.textMuted} />
+            <Text style={styles.ownerText}>Owned by <Text style={styles.ownerName}>{ownerName}</Text></Text>
+          </View>
+        ) : null}
 
         <View style={styles.bottomRow}>
           <Text style={styles.openLabel}>Open team workspace</Text>
@@ -176,6 +185,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
     fontFamily: UI.typography.bold,
+  },
+  ownerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ownerText: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: UI.typography.medium,
+  },
+  ownerName: {
+    color: Colors.textSecondary,
+    fontFamily: UI.typography.semibold,
   },
   bottomRow: {
     flexDirection: 'row',

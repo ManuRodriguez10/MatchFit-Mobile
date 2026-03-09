@@ -33,6 +33,9 @@ interface EventSummary {
   location: string | null;
   date: string;
   kickoff_time: string | null;
+  rsvpResponded?: number;
+  totalPlayers?: number;
+  myRsvpStatus?: 'going' | 'not_going' | null;
 }
 
 interface MyLineup {
@@ -112,7 +115,7 @@ export default function TeamDashboardScreen() {
         supabase.from('teams').select('id, name').eq('id', teamId).single(),
         supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', teamId),
         supabase.from('events').select('id', { count: 'exact', head: true }).eq('team_id', teamId).gte('date', today),
-        supabase.from('events').select('id, event_type, title, opponent, location, date, kickoff_time').eq('team_id', teamId).gte('date', today).order('date', { ascending: true }).limit(3),
+        supabase.from('events').select('id, event_type, title, opponent, location, date, kickoff_time').eq('team_id', teamId).eq('date', today).order('kickoff_time', { ascending: true }),
         supabase.from('lineups').select('id', { count: 'exact', head: true }).eq('team_id', teamId).eq('status', 'published'),
         supabase.from('lineups').select('id, title, formation, status').eq('team_id', teamId).order('updated_at', { ascending: false }).limit(2),
       ] as const;
@@ -134,12 +137,45 @@ export default function TeamDashboardScreen() {
 
       if (teamRes.error) throw teamRes.error;
 
+      const totalPlayersCount = playersRes.count ?? 0;
       setTeam(teamRes.data);
-      setPlayerCount(playersRes.count ?? 0);
+      setPlayerCount(totalPlayersCount);
       setEventCount(eventsCountRes.count ?? 0);
-      setUpcomingEvents(eventsRes.data ?? []);
       setPublishedLineupCount(lineupsCountRes.count ?? 0);
       setRecentLineups(lineupsRes.data ?? []);
+
+      // Fetch RSVP counts for today's games and meetings
+      const todayEvents = (eventsRes.data ?? []) as EventSummary[];
+      const rsvpEventIds = todayEvents
+        .filter(e => e.event_type !== 'practice')
+        .map(e => e.id);
+
+      if (rsvpEventIds.length > 0) {
+        const { data: rsvpData } = await supabase
+          .from('rsvps')
+          .select('event_id, player_id, status')
+          .in('event_id', rsvpEventIds);
+
+        if (rsvpData) {
+          const countMap: Record<string, number> = {};
+          const playerRsvpMap: Record<string, string> = {};
+          for (const r of rsvpData as any[]) {
+            countMap[r.event_id] = (countMap[r.event_id] ?? 0) + 1;
+            if (profile?.id && r.player_id === profile.id) {
+              playerRsvpMap[r.event_id] = r.status;
+            }
+          }
+          for (const ev of todayEvents) {
+            if (ev.event_type !== 'practice') {
+              ev.rsvpResponded = countMap[ev.id] ?? 0;
+              ev.totalPlayers = totalPlayersCount;
+              ev.myRsvpStatus = (playerRsvpMap[ev.id] as 'going' | 'not_going') ?? null;
+            }
+          }
+        }
+      }
+
+      setUpcomingEvents(todayEvents);
 
       if (myLineupsRes && 'data' in myLineupsRes && myLineupsRes.data) {
         const mapped: MyLineup[] = myLineupsRes.data.map((row: any) => ({
@@ -240,6 +276,102 @@ export default function TeamDashboardScreen() {
             <Text style={styles.dateChipText}>{todayLabel}</Text>
           </View>
         </View>
+
+        {/* Today's Events — center of attention */}
+        <Card padded={false} style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <View style={styles.panelHeaderLeft}>
+              <View style={[styles.panelIconWrap, { backgroundColor: Colors.primary }]}>
+                <Ionicons name="calendar-outline" size={16} color="#fff" />
+              </View>
+              <View>
+                <Text style={styles.panelTitle}>Today's Events</Text>
+                <Text style={styles.panelSubtitle}>What's on today</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => router.push(`/team/${team.id}/events`)} activeOpacity={0.8}>
+              <Text style={styles.viewAllText}>View all</Text>
+            </TouchableOpacity>
+          </View>
+
+          {upcomingEvents.length === 0 ? (
+            <Card muted style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No events scheduled for today.</Text>
+            </Card>
+          ) : (
+            upcomingEvents.map(event => {
+              const config = eventTypeConfig[event.event_type] || eventTypeConfig.practice;
+              const displayTitle = event.title
+                || (event.event_type === 'game' && event.opponent ? `vs ${event.opponent}` : null)
+                || config.label;
+              const isRsvpEvent = event.event_type !== 'practice' && event.totalPlayers != null;
+              const needsPlayerRsvp = !isCoach && isRsvpEvent && !event.myRsvpStatus;
+              const playerSaidYes = !isCoach && event.myRsvpStatus === 'going';
+              const playerSaidNo = !isCoach && event.myRsvpStatus === 'not_going';
+
+              return (
+                <TouchableOpacity
+                  key={event.id}
+                  onPress={() => router.push({ pathname: '/team/event-detail', params: { teamId, eventId: event.id } })}
+                  activeOpacity={0.7}
+                >
+                  <Card muted style={styles.eventCard}>
+                    <View style={styles.eventTop}>
+                      <Text style={styles.eventTitle} numberOfLines={1}>{displayTitle}</Text>
+                      <Chip label={config.label} tone={config.tone} />
+                    </View>
+                    <View style={styles.metaRow}>
+                      <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
+                      <Text style={styles.metaText}>Time: {formatKickoffTime(event.kickoff_time)}</Text>
+                    </View>
+                    {event.location ? (
+                      <View style={styles.metaRow}>
+                        <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
+                        <Text style={styles.metaText}>{event.location}</Text>
+                      </View>
+                    ) : null}
+                    {isCoach && isRsvpEvent && (
+                      <>
+                        <View style={styles.metaRow}>
+                          <Ionicons name="people-outline" size={12} color={Colors.textMuted} />
+                          <Text style={styles.metaText}>
+                            RSVP: {event.rsvpResponded ?? 0}/{event.totalPlayers} responded
+                          </Text>
+                        </View>
+                        {((event.totalPlayers ?? 0) - (event.rsvpResponded ?? 0)) > 0 && (
+                          <View style={styles.rsvpWarningRow}>
+                            <Ionicons name="alert-circle" size={14} color="#F59E0B" />
+                            <Text style={styles.rsvpWarningText}>
+                              {(event.totalPlayers ?? 0) - (event.rsvpResponded ?? 0)} player{((event.totalPlayers ?? 0) - (event.rsvpResponded ?? 0)) === 1 ? '' : 's'} still missing RSVP
+                            </Text>
+                          </View>
+                        )}
+                      </>
+                    )}
+                    {playerSaidYes && (
+                      <View style={styles.rsvpYesRow}>
+                        <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                        <Text style={styles.rsvpYesText}>RSVP: Yes</Text>
+                      </View>
+                    )}
+                    {playerSaidNo && (
+                      <View style={styles.rsvpNoRow}>
+                        <Ionicons name="close-circle" size={14} color="#EF4444" />
+                        <Text style={styles.rsvpNoText}>RSVP: No</Text>
+                      </View>
+                    )}
+                    {needsPlayerRsvp && (
+                      <View style={styles.rsvpWarningRow}>
+                        <Ionicons name="alert-circle" size={14} color="#F59E0B" />
+                        <Text style={styles.rsvpWarningText}>You still need to RSVP</Text>
+                      </View>
+                    )}
+                  </Card>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </Card>
 
         {/* Stat cards */}
         <View style={styles.statRow}>
@@ -374,66 +506,6 @@ export default function TeamDashboardScreen() {
             </TouchableOpacity>
           </Card>
         )}
-
-        {/* Upcoming Events */}
-        <Card padded={false} style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <View style={styles.panelHeaderLeft}>
-              <View style={[styles.panelIconWrap, { backgroundColor: Colors.primary }]}>
-                <Ionicons name="calendar-outline" size={16} color="#fff" />
-              </View>
-              <View>
-                <Text style={styles.panelTitle}>Upcoming Events</Text>
-                <Text style={styles.panelSubtitle}>Your schedule at a glance</Text>
-              </View>
-            </View>
-            <TouchableOpacity onPress={() => router.push(`/team/${team.id}/events`)} activeOpacity={0.8}>
-              <Text style={styles.viewAllText}>View all</Text>
-            </TouchableOpacity>
-          </View>
-
-          {upcomingEvents.length === 0 ? (
-            <Card muted style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No upcoming events yet.</Text>
-            </Card>
-          ) : (
-            upcomingEvents.map(event => {
-              const config = eventTypeConfig[event.event_type] || eventTypeConfig.practice;
-              const displayTitle = event.title
-                || (event.event_type === 'game' && event.opponent ? `vs ${event.opponent}` : null)
-                || config.label;
-
-              return (
-                <TouchableOpacity
-                  key={event.id}
-                  onPress={() => router.push({ pathname: '/team/event-detail', params: { teamId, eventId: event.id } })}
-                  activeOpacity={0.7}
-                >
-                  <Card muted style={styles.eventCard}>
-                    <View style={styles.eventTop}>
-                      <Text style={styles.eventTitle} numberOfLines={1}>{displayTitle}</Text>
-                      <Chip label={config.label} tone={config.tone} />
-                    </View>
-                    <View style={styles.metaRow}>
-                      <Ionicons name="calendar-outline" size={12} color={Colors.textMuted} />
-                      <Text style={styles.metaText}>Date: {formatDate(event.date)}</Text>
-                    </View>
-                    <View style={styles.metaRow}>
-                      <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
-                      <Text style={styles.metaText}>Time: {formatKickoffTime(event.kickoff_time)}</Text>
-                    </View>
-                    {event.location ? (
-                      <View style={styles.metaRow}>
-                        <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
-                        <Text style={styles.metaText}>{event.location}</Text>
-                      </View>
-                    ) : null}
-                  </Card>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </Card>
 
         {/* Recent Lineups (coach only) */}
         {isCoach && (
@@ -608,6 +680,30 @@ const styles = StyleSheet.create({
   },
   metaText: {
     color: Colors.textSecondary, fontSize: 13, fontFamily: UI.typography.medium,
+  },
+  rsvpYesRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#D1FAE5', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5, marginTop: 2,
+  },
+  rsvpYesText: {
+    color: '#065F46', fontSize: 12, fontFamily: UI.typography.bold,
+  },
+  rsvpNoRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#FEE2E2', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5, marginTop: 2,
+  },
+  rsvpNoText: {
+    color: '#991B1B', fontSize: 12, fontFamily: UI.typography.bold,
+  },
+  rsvpWarningRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#FEF3C7', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5, marginTop: 2,
+  },
+  rsvpWarningText: {
+    color: '#92400E', fontSize: 12, fontFamily: UI.typography.bold,
   },
   starterChip: {
     marginLeft: 'auto',
