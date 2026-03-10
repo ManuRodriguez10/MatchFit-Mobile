@@ -22,10 +22,14 @@ import { Colors, Gradients } from '@/constants/colors';
 import { UI } from '@/constants/ui';
 import Card from '@/components/ui/Card';
 import GradientText from '@/components/ui/GradientText';
+import LoadMoreButton from '@/components/ui/LoadMoreButton';
+import { showToast } from '@/components/ui/Toast';
 
 // ---------------------------------------------------------------------------
 // Types & constants
 // ---------------------------------------------------------------------------
+
+const PAGE_SIZE = 50;
 
 interface EventItem {
   id: string;
@@ -172,12 +176,51 @@ export default function TeamEventsScreen() {
   });
   const [showPastMonthPicker, setShowPastMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(pastEventsMonth.year);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const visibleTabKeys = useMemo<TabKey[]>(
     () => (isCoach ? TAB_KEYS : ['calendar', 'week']),
     [isCoach],
   );
 
-  // ── Fetch all events (past + future) — re-fetch on every focus ────────
+  // ── Enrich events with RSVP/lineup data ────────────────────────────────
+  const enrichEvents = useCallback(async (eventList: EventItem[]) => {
+    if (eventList.length === 0) return;
+    const eventIds = eventList.map(e => e.id);
+
+    const [{ data: rsvpData }, { data: lineupData }] = await Promise.all([
+      supabase.from('rsvps').select('event_id, status').in('event_id', eventIds).limit(500),
+      supabase.from('lineups').select('event_id, status').in('event_id', eventIds).limit(200),
+    ]);
+
+    if (rsvpData) {
+      const countMap: Record<string, { going: number; total: number }> = {};
+      for (const r of rsvpData as any[]) {
+        if (!countMap[r.event_id]) countMap[r.event_id] = { going: 0, total: 0 };
+        countMap[r.event_id].total++;
+        if (r.status === 'going') countMap[r.event_id].going++;
+      }
+      for (const ev of eventList) {
+        const c = countMap[ev.id];
+        ev.rsvpGoing = c?.going ?? 0;
+        ev.rsvpTotal = c?.total ?? 0;
+      }
+    }
+
+    if (lineupData) {
+      const lineupMap: Record<string, string> = {};
+      for (const l of lineupData as any[]) {
+        if (!lineupMap[l.event_id] || l.status === 'published') {
+          lineupMap[l.event_id] = l.status;
+        }
+      }
+      for (const ev of eventList) {
+        ev.lineupStatus = (lineupMap[ev.id] as 'published' | 'draft') ?? null;
+      }
+    }
+  }, []);
+
+  // ── Fetch events with pagination ───────────────────────────────────────
   const loadEvents = useCallback(() => {
     if (!teamId) { setLoading(false); return; }
     setLoading(true);
@@ -187,58 +230,49 @@ export default function TeamEventsScreen() {
           .from('events')
           .select('id, event_type, title, opponent, location, date, kickoff_time, recurrence_group_id')
           .eq('team_id', teamId)
-          .order('date', { ascending: true });
-        if (error) console.warn('Events fetch error:', error.message);
-
-        const eventList = (data ?? []) as EventItem[];
-
-        // Fetch RSVP counts for all events in parallel
-        if (eventList.length > 0) {
-          const eventIds = eventList.map(e => e.id);
-          const { data: rsvpData } = await supabase
-            .from('rsvps')
-            .select('event_id, status')
-            .in('event_id', eventIds);
-
-          if (rsvpData) {
-            const countMap: Record<string, { going: number; total: number }> = {};
-            for (const r of rsvpData as any[]) {
-              if (!countMap[r.event_id]) countMap[r.event_id] = { going: 0, total: 0 };
-              countMap[r.event_id].total++;
-              if (r.status === 'going') countMap[r.event_id].going++;
-            }
-            for (const ev of eventList) {
-              const c = countMap[ev.id];
-              ev.rsvpGoing = c?.going ?? 0;
-              ev.rsvpTotal = c?.total ?? 0;
-            }
-          }
-
-          // Fetch lineup status for each event
-          const { data: lineupData } = await supabase
-            .from('lineups')
-            .select('event_id, status')
-            .in('event_id', eventIds);
-
-          if (lineupData) {
-            const lineupMap: Record<string, string> = {};
-            for (const l of lineupData as any[]) {
-              if (!lineupMap[l.event_id] || l.status === 'published') {
-                lineupMap[l.event_id] = l.status;
-              }
-            }
-            for (const ev of eventList) {
-              ev.lineupStatus = (lineupMap[ev.id] as 'published' | 'draft') ?? null;
-            }
-          }
+          .order('date', { ascending: true })
+          .range(0, PAGE_SIZE - 1);
+        if (error) {
+          if (__DEV__) console.warn('Events fetch error:', error.message);
+          showToast('error', 'Failed to load events');
         }
 
+        const eventList = (data ?? []) as EventItem[];
+        setHasMore(eventList.length === PAGE_SIZE);
+
+        await enrichEvents(eventList);
         setEvents(eventList);
+      } catch {
+        showToast('error', 'Failed to load events');
       } finally {
         setLoading(false);
       }
     })();
-  }, [teamId]);
+  }, [teamId, enrichEvents]);
+
+  const loadMoreEvents = useCallback(async () => {
+    if (!teamId || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const from = events.length;
+      const { data } = await supabase
+        .from('events')
+        .select('id, event_type, title, opponent, location, date, kickoff_time, recurrence_group_id')
+        .eq('team_id', teamId)
+        .order('date', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+
+      const newEvents = (data ?? []) as EventItem[];
+      setHasMore(newEvents.length === PAGE_SIZE);
+
+      await enrichEvents(newEvents);
+      setEvents(prev => [...prev, ...newEvents]);
+    } catch {
+      showToast('error', 'Failed to load more events');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [teamId, events.length, loadingMore, hasMore, enrichEvents]);
 
   useFocusEffect(loadEvents);
 
@@ -872,6 +906,16 @@ export default function TeamEventsScreen() {
         )}
         {activeTab === 'week' && renderWeek()}
         {activeTab === 'past' && renderPast()}
+
+        {hasMore && (
+          <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+            <LoadMoreButton
+              onPress={loadMoreEvents}
+              loading={loadingMore}
+              label={`Load More Events`}
+            />
+          </View>
+        )}
       </ScrollView>
 
       <Modal

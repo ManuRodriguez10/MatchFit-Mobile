@@ -87,7 +87,8 @@ export default function TeamScreen() {
           () => supabase
             .from('team_coaches')
             .select('role, team:teams(id, name, invite_code, created_by)')
-            .eq('coach_id', user.id),
+            .eq('coach_id', user.id)
+            .range(0, 49),
           { message: 'Timed out while loading teams.' },
         );
 
@@ -98,36 +99,39 @@ export default function TeamScreen() {
         ) as { role: string; team: { id: string; name: string; invite_code: string; created_by: string } }[];
 
         if (rows.length > 0) {
-          // Fetch member counts and owner names in parallel
+          // Batch-fetch member counts and owner names (2 queries instead of 2N)
+          const teamIds = rows.map(r => r.team.id);
           const ownerIds = [...new Set(rows.map(r => r.team.created_by))];
-          const [counts, ownerResult] = await withRetry(
+          const [coachData, playerData, ownerResult] = await withRetry(
             () => Promise.all([
-              Promise.all(
-                rows.map((row) =>
-                  Promise.all([
-                    supabase.from('team_coaches').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
-                    supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
-                  ]),
-                ),
-              ),
-              supabase.from('profiles').select('id, full_name').in('id', ownerIds),
+              supabase.from('team_coaches').select('team_id').in('team_id', teamIds).limit(200),
+              supabase.from('team_players').select('team_id').in('team_id', teamIds).limit(500),
+              supabase.from('profiles').select('id, full_name').in('id', ownerIds).limit(50),
             ]),
             { message: 'Timed out while loading team members.' },
           );
+
+          // Count locally
+          const coachCountMap = new Map<string, number>();
+          for (const c of (coachData.data ?? []) as { team_id: string }[]) {
+            coachCountMap.set(c.team_id, (coachCountMap.get(c.team_id) ?? 0) + 1);
+          }
+          const playerCountMap = new Map<string, number>();
+          for (const p of (playerData.data ?? []) as { team_id: string }[]) {
+            playerCountMap.set(p.team_id, (playerCountMap.get(p.team_id) ?? 0) + 1);
+          }
 
           const ownerMap = new Map<string, string>();
           for (const owner of (ownerResult.data ?? [])) {
             ownerMap.set(owner.id, owner.full_name);
           }
 
-          for (let i = 0; i < rows.length; i++) {
-            const { team, role } = rows[i];
-            const [coachRes, playerRes] = counts[i];
+          for (const { team, role } of rows) {
             results.push({
               teamId: team.id,
               teamName: team.name,
               inviteCode: team.invite_code,
-              memberCount: (coachRes.count ?? 0) + (playerRes.count ?? 0),
+              memberCount: (coachCountMap.get(team.id) ?? 0) + (playerCountMap.get(team.id) ?? 0),
               userRole: role as CoachRole,
               ownerName: ownerMap.get(team.created_by) ?? 'Unknown',
             });
@@ -138,7 +142,8 @@ export default function TeamScreen() {
           () => supabase
             .from('team_players')
             .select('team:teams(id, name, invite_code)')
-            .eq('player_id', user.id),
+            .eq('player_id', user.id)
+            .range(0, 49),
           { message: 'Timed out while loading teams.' },
         );
 
@@ -149,26 +154,31 @@ export default function TeamScreen() {
         ) as { team: { id: string; name: string; invite_code: string } }[];
 
         if (rows.length > 0) {
-          const counts = await withRetry(
-            () => Promise.all(
-              rows.map((row) =>
-                Promise.all([
-                  supabase.from('team_coaches').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
-                  supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', row.team.id),
-                ]),
-              ),
-            ),
+          // Batch-fetch member counts (2 queries instead of 2N)
+          const teamIds = rows.map(r => r.team.id);
+          const [coachData, playerData] = await withRetry(
+            () => Promise.all([
+              supabase.from('team_coaches').select('team_id').in('team_id', teamIds).limit(200),
+              supabase.from('team_players').select('team_id').in('team_id', teamIds).limit(500),
+            ]),
             { message: 'Timed out while loading team members.' },
           );
 
-          for (let i = 0; i < rows.length; i++) {
-            const { team } = rows[i];
-            const [coachRes, playerRes] = counts[i];
+          const coachCountMap = new Map<string, number>();
+          for (const c of (coachData.data ?? []) as { team_id: string }[]) {
+            coachCountMap.set(c.team_id, (coachCountMap.get(c.team_id) ?? 0) + 1);
+          }
+          const playerCountMap = new Map<string, number>();
+          for (const p of (playerData.data ?? []) as { team_id: string }[]) {
+            playerCountMap.set(p.team_id, (playerCountMap.get(p.team_id) ?? 0) + 1);
+          }
+
+          for (const { team } of rows) {
             results.push({
               teamId: team.id,
               teamName: team.name,
               inviteCode: team.invite_code,
-              memberCount: (coachRes.count ?? 0) + (playerRes.count ?? 0),
+              memberCount: (coachCountMap.get(team.id) ?? 0) + (playerCountMap.get(team.id) ?? 0),
               userRole: 'player',
             });
           }
@@ -177,7 +187,7 @@ export default function TeamScreen() {
 
       setTeams(results);
     } catch (err) {
-      console.error('fetchTeams error:', err);
+      if (__DEV__) console.error('fetchTeams error:', err);
       setLoadError(err instanceof Error ? err.message : 'Failed to load teams.');
     } finally {
       setLoading(false);

@@ -25,6 +25,9 @@ import { Colors, Gradients } from '@/constants/colors';
 import { UI } from '@/constants/ui';
 import { PlayerPosition } from '@/types/database';
 import GradientText from '@/components/ui/GradientText';
+import LoadMoreButton from '@/components/ui/LoadMoreButton';
+
+const PLAYER_PAGE_SIZE = 30;
 
 function getInitials(name: string): string {
   const parts = name.trim().split(' ').filter(Boolean);
@@ -290,6 +293,8 @@ export default function RosterScreen() {
   const [displayView, setDisplayView] = useState<DisplayView>('list');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [showPlayerModal, setShowPlayerModal] = useState(false);
+  const [hasMorePlayers, setHasMorePlayers] = useState(false);
+  const [loadingMorePlayers, setLoadingMorePlayers] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!teamId) {
@@ -301,18 +306,23 @@ export default function RosterScreen() {
     try {
       const [teamResult, coachResult, playerResult] = await Promise.all([
         supabase.from('teams').select('id, name, invite_code').eq('id', teamId).single(),
-        supabase.from('team_coaches').select('id, role, profile:profiles(id, full_name, email, phone)').eq('team_id', teamId).order('role'),
+        supabase.from('team_coaches').select('id, role, profile:profiles(id, full_name, email, phone)').eq('team_id', teamId).order('role').limit(20),
         supabase
           .from('team_players')
           .select('id, jersey_number, positions, profile:profiles(id, full_name, email, phone, date_of_birth, nationality, height_ft, height_in, weight_lbs)')
           .eq('team_id', teamId)
-          .order('jersey_number', { ascending: true, nullsFirst: false }),
+          .order('jersey_number', { ascending: true, nullsFirst: false })
+          .range(0, PLAYER_PAGE_SIZE - 1),
       ]);
 
       if (teamResult.error) throw teamResult.error;
       setTeam(teamResult.data);
       if (!coachResult.error && coachResult.data) setCoaches(coachResult.data as unknown as CoachRow[]);
-      if (!playerResult.error && playerResult.data) setPlayers(playerResult.data as unknown as PlayerRow[]);
+      if (!playerResult.error && playerResult.data) {
+        const playerRows = playerResult.data as unknown as PlayerRow[];
+        setPlayers(playerRows);
+        setHasMorePlayers(playerRows.length === PLAYER_PAGE_SIZE);
+      }
     } catch {
       setError('Failed to load roster.');
     } finally {
@@ -320,6 +330,29 @@ export default function RosterScreen() {
       setRefreshing(false);
     }
   }, [teamId]);
+
+  const loadMorePlayers = useCallback(async () => {
+    if (!teamId || loadingMorePlayers) return;
+    setLoadingMorePlayers(true);
+    try {
+      const from = players.length;
+      const { data, error: fetchError } = await supabase
+        .from('team_players')
+        .select('id, jersey_number, positions, profile:profiles(id, full_name, email, phone, date_of_birth, nationality, height_ft, height_in, weight_lbs)')
+        .eq('team_id', teamId)
+        .order('jersey_number', { ascending: true, nullsFirst: false })
+        .range(from, from + PLAYER_PAGE_SIZE - 1);
+
+      if (fetchError) throw fetchError;
+      const newPlayers = (data ?? []) as unknown as PlayerRow[];
+      setPlayers(prev => [...prev, ...newPlayers]);
+      setHasMorePlayers(newPlayers.length === PLAYER_PAGE_SIZE);
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setLoadingMorePlayers(false);
+    }
+  }, [teamId, players.length, loadingMorePlayers]);
 
   useFocusEffect(
     useCallback(() => {
@@ -586,6 +619,12 @@ export default function RosterScreen() {
                     }}
                   />
                 ))}
+              </View>
+            )}
+
+            {hasMorePlayers && positionFilter === 'all' && (
+              <View style={{ marginTop: 12 }}>
+                <LoadMoreButton onPress={loadMorePlayers} loading={loadingMorePlayers} />
               </View>
             )}
           </>

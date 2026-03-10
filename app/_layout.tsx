@@ -11,9 +11,14 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { initSentry, Sentry } from '@/lib/sentry';
 import LoadingScreen from '@/components/LoadingScreen';
 import ToastContainer from '@/components/ui/Toast';
+import OfflineBanner from '@/components/ui/OfflineBanner';
 import '../global.css';
+
+// Initialize Sentry as early as possible
+initSentry();
 
 function RootLayoutNav() {
   const { user, profile, loading } = useAuth();
@@ -167,12 +172,15 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <View style={{ flex: 1 }}>
-        <RootLayoutNav />
-        <ToastContainer />
-      </View>
-    </AuthProvider>
+    <Sentry.ErrorBoundary fallback={<LoadingScreen />}>
+      <AuthProvider>
+        <View style={{ flex: 1 }}>
+          <OfflineBanner />
+          <RootLayoutNav />
+          <ToastContainer />
+        </View>
+      </AuthProvider>
+    </Sentry.ErrorBoundary>
   );
 }
 

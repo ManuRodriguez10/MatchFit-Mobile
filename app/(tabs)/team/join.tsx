@@ -116,7 +116,7 @@ export default function JoinTeamScreen() {
         } else {
           setGeneralError(lookup.message ?? 'Unable to validate team code. Please try again.');
         }
-        console.error('Invite code lookup failed:', lookup);
+        if (__DEV__) console.error('Invite code lookup failed:', lookup);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }

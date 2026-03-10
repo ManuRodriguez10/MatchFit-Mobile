@@ -17,6 +17,10 @@ import { Colors, Gradients } from '@/constants/colors';
 import { UI } from '@/constants/ui';
 import Card from '@/components/ui/Card';
 import GradientText from '@/components/ui/GradientText';
+import LoadMoreButton from '@/components/ui/LoadMoreButton';
+import { showToast } from '@/components/ui/Toast';
+
+const GAME_PAGE_SIZE = 50;
 
 interface GameOption {
   id: string;
@@ -51,6 +55,39 @@ export default function SelectGameScreen() {
   const resolvedTeamId = Array.isArray(teamId) ? teamId[0] : teamId;
   const [games, setGames] = useState<GameOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasMoreGames, setHasMoreGames] = useState(false);
+  const [loadingMoreGames, setLoadingMoreGames] = useState(false);
+
+  const enrichGames = useCallback(async (gamesData: any[]) => {
+    if (gamesData.length === 0) return [];
+
+    const gameIds = gamesData.map(g => g.id);
+    const { data: lineupData } = await supabase
+      .from('lineups')
+      .select('id, event_id, status, updated_at')
+      .in('event_id', gameIds)
+      .in('status', ['published', 'draft'])
+      .order('updated_at', { ascending: false })
+      .limit(200);
+
+    const publishedEventIds = new Set(
+      (lineupData ?? []).filter((l: any) => l.status === 'published').map((l: any) => l.event_id),
+    );
+    const latestDraftByEvent = new Map<string, string>();
+    for (const lineup of lineupData ?? []) {
+      const row = lineup as any;
+      if (row.status === 'draft' && row.event_id && !latestDraftByEvent.has(row.event_id)) {
+        latestDraftByEvent.set(row.event_id, row.id);
+      }
+    }
+
+    return gamesData
+      .filter(g => !publishedEventIds.has(g.id))
+      .map(g => ({
+        ...g,
+        draftLineupId: latestDraftByEvent.get(g.id) ?? null,
+      }));
+  }, []);
 
   const loadGames = useCallback(async () => {
     if (!resolvedTeamId) { setLoading(false); return; }
@@ -58,55 +95,58 @@ export default function SelectGameScreen() {
     try {
       const today = new Date().toISOString().slice(0, 10);
 
-      // Get all upcoming games
       const { data: gamesData } = await supabase
         .from('events')
         .select('id, title, opponent, date, kickoff_time, location')
         .eq('team_id', resolvedTeamId)
         .eq('event_type', 'game')
         .gte('date', today)
-        .order('date', { ascending: true });
+        .order('date', { ascending: true })
+        .range(0, GAME_PAGE_SIZE - 1);
 
       if (!gamesData || gamesData.length === 0) {
         setGames([]);
+        setHasMoreGames(false);
         return;
       }
 
-      // Get published + draft lineups for these games so we can resume drafts.
-      const gameIds = gamesData.map(g => g.id);
-      const { data: lineupData } = await supabase
-        .from('lineups')
-        .select('id, event_id, status, updated_at')
-        .in('event_id', gameIds)
-        .in('status', ['published', 'draft'])
-        .order('updated_at', { ascending: false });
-
-      const publishedEventIds = new Set(
-        (lineupData ?? []).filter((l: any) => l.status === 'published').map((l: any) => l.event_id),
-      );
-      const latestDraftByEvent = new Map<string, string>();
-      for (const lineup of lineupData ?? []) {
-        const row = lineup as any;
-        if (row.status === 'draft' && row.event_id && !latestDraftByEvent.has(row.event_id)) {
-          latestDraftByEvent.set(row.event_id, row.id);
-        }
-      }
-
-      // Filter out games with published lineups and attach draft lineup IDs.
-      setGames(
-        gamesData
-          .filter(g => !publishedEventIds.has(g.id))
-          .map(g => ({
-            ...g,
-            draftLineupId: latestDraftByEvent.get(g.id) ?? null,
-          })),
-      );
+      setHasMoreGames(gamesData.length === GAME_PAGE_SIZE);
+      const enriched = await enrichGames(gamesData);
+      setGames(enriched);
     } catch (err) {
-      console.error('Error loading games:', err);
+      if (__DEV__) console.error('Error loading games:', err);
+      showToast('error', 'Failed to load games');
     } finally {
       setLoading(false);
     }
-  }, [resolvedTeamId]);
+  }, [resolvedTeamId, enrichGames]);
+
+  const loadMoreGames = useCallback(async () => {
+    if (!resolvedTeamId || loadingMoreGames) return;
+    setLoadingMoreGames(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const from = games.length;
+
+      const { data: gamesData } = await supabase
+        .from('events')
+        .select('id, title, opponent, date, kickoff_time, location')
+        .eq('team_id', resolvedTeamId)
+        .eq('event_type', 'game')
+        .gte('date', today)
+        .order('date', { ascending: true })
+        .range(from, from + GAME_PAGE_SIZE - 1);
+
+      if (!gamesData) return;
+      setHasMoreGames(gamesData.length === GAME_PAGE_SIZE);
+      const enriched = await enrichGames(gamesData);
+      setGames(prev => [...prev, ...enriched]);
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setLoadingMoreGames(false);
+    }
+  }, [resolvedTeamId, games.length, loadingMoreGames, enrichGames]);
 
   useFocusEffect(useCallback(() => { loadGames(); }, [loadGames]));
 
@@ -228,6 +268,10 @@ export default function SelectGameScreen() {
               );
             })}
           </Card>
+
+          {hasMoreGames && (
+            <LoadMoreButton onPress={loadMoreGames} loading={loadingMoreGames} />
+          )}
 
           <View style={styles.hintBanner}>
             <Ionicons name="information-circle-outline" size={16} color="rgba(255,255,255,0.85)" />

@@ -109,6 +109,23 @@ export default function TeamSetupScreen() {
       newErrors.weightLbs = 'Enter a valid weight';
     }
 
+    if (dateOfBirth.trim()) {
+      const [mm, dd, yyyy] = dateOfBirth.split('/');
+      const m = parseInt(mm, 10);
+      const d = parseInt(dd, 10);
+      const y = parseInt(yyyy, 10);
+      const parsed = new Date(y, m - 1, d);
+      if (!mm || !dd || !yyyy || isNaN(parsed.getTime()) || parsed.getMonth() !== m - 1 || parsed.getDate() !== d) {
+        newErrors.dateOfBirth = 'Enter a valid date (MM/DD/YYYY)';
+      } else if (y < 1940 || parsed > new Date()) {
+        newErrors.dateOfBirth = 'Enter a realistic date of birth';
+      }
+    }
+
+    if (nationality.trim().length > 50) {
+      newErrors.nationality = 'Must be 50 characters or less';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -125,25 +142,7 @@ export default function TeamSetupScreen() {
     try {
       const jersey = parseInt(jerseyNumber, 10);
 
-      // 1. Check jersey uniqueness
-      const { data: jerseyAvailable, error: jerseyFnError } = await supabase.rpc(
-        'check_jersey_available',
-        { p_team_id: teamId, p_jersey_number: jersey },
-      );
-
-      if (jerseyFnError) throw jerseyFnError;
-
-      if (!jerseyAvailable) {
-        setErrors(prev => ({
-          ...prev,
-          jerseyNumber: `Jersey #${jersey} is already taken on this team`,
-        }));
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        setLoading(false);
-        return;
-      }
-
-      // 2. Update profile if any fields changed
+      // Update profile if any fields changed
       const profileUpdates: Record<string, any> = {};
       if (heightFt.trim()) profileUpdates.height_ft = parseInt(heightFt, 10);
       if (heightIn.trim()) profileUpdates.height_in = parseInt(heightIn, 10);
@@ -165,7 +164,7 @@ export default function TeamSetupScreen() {
         if (profileError) throw profileError;
       }
 
-      // 3. Insert team_players record
+      // Insert team_players record (DB unique constraint handles race conditions)
       const { error: playerError } = await supabase.from('team_players').insert({
         team_id: teamId,
         player_id: user!.id,
@@ -197,7 +196,7 @@ export default function TeamSetupScreen() {
         [{ text: 'View Team', onPress: () => router.replace('/(tabs)/team') }],
       );
     } catch (error: any) {
-      console.error('Team setup error:', JSON.stringify(error));
+      if (__DEV__) console.error('Team setup error:', JSON.stringify(error));
       setGeneralError(error?.message ?? 'Something went wrong. Please try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {

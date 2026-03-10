@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(data);
       return data;
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      if (__DEV__) console.error('Error fetching profile:', error);
       setProfile(null);
       return null;
     }
@@ -176,7 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Re-fetch profile so root layout re-evaluates routing
       await fetchProfile(user.id);
     } catch (error) {
-      console.error('Error completing onboarding:', error);
+      if (__DEV__) console.error('Error completing onboarding:', error);
       throw error;
     }
   };
@@ -197,7 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
       setSession(null);
     } catch (error) {
-      console.error('Error signing out:', error);
+      if (__DEV__) console.error('Error signing out:', error);
       throw error;
     }
   };
@@ -232,6 +232,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!initialised && event === 'INITIAL_SESSION') return;
+
+      if (event === 'SIGNED_OUT') {
+        // Session expired or user signed out — clear state
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      if (event === 'TOKEN_REFRESHED') {
+        // Token silently refreshed — update session, keep user/profile
+        setSession(session);
+        if (session?.user) setUser(session.user);
+        return;
+      }
 
       setSession(session);
       setUser(session?.user ?? null);

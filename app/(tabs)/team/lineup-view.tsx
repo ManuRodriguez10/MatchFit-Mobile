@@ -95,7 +95,8 @@ export default function LineupViewScreen() {
         const { data: lpData, error: lpError } = await supabase
           .from('lineup_players')
           .select('player_id, position_key, is_starter')
-          .eq('lineup_id', lineupId);
+          .eq('lineup_id', lineupId)
+          .limit(30);
 
         if (lpError) throw lpError;
 
@@ -104,7 +105,8 @@ export default function LineupViewScreen() {
           const { data: rosterData } = await supabase
             .from('team_players')
             .select('id, jersey_number, positions, player_id, profiles:player_id(id, full_name, email)')
-            .eq('team_id', teamId);
+            .eq('team_id', teamId)
+            .limit(60);
 
           const rosterByProfileId = new Map(
             (rosterData || []).map((r: any) => [
@@ -161,7 +163,7 @@ export default function LineupViewScreen() {
         }
       }
     } catch (err) {
-      console.error('Error loading lineup:', err);
+      if (__DEV__) console.error('Error loading lineup:', err);
       showToast('error', 'Failed to load lineup');
     } finally {
       setLoading(false);

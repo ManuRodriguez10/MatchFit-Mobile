@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import Card from '@/components/ui/Card';
 import Chip from '@/components/ui/Chip';
 import StatCard from '@/components/ui/StatCard';
 import GradientText from '@/components/ui/GradientText';
+import { useThrottledCallback } from '@/hooks/useThrottledCallback';
 
 interface TeamSummary {
   id: string;
@@ -115,7 +116,7 @@ export default function TeamDashboardScreen() {
         supabase.from('teams').select('id, name').eq('id', teamId).single(),
         supabase.from('team_players').select('id', { count: 'exact', head: true }).eq('team_id', teamId),
         supabase.from('events').select('id', { count: 'exact', head: true }).eq('team_id', teamId).gte('date', today),
-        supabase.from('events').select('id, event_type, title, opponent, location, date, kickoff_time').eq('team_id', teamId).eq('date', today).order('kickoff_time', { ascending: true }),
+        supabase.from('events').select('id, event_type, title, opponent, location, date, kickoff_time').eq('team_id', teamId).eq('date', today).order('kickoff_time', { ascending: true }).limit(20),
         supabase.from('lineups').select('id', { count: 'exact', head: true }).eq('team_id', teamId).eq('status', 'published'),
         supabase.from('lineups').select('id, title, formation, status').eq('team_id', teamId).order('updated_at', { ascending: false }).limit(2),
       ] as const;
@@ -154,7 +155,8 @@ export default function TeamDashboardScreen() {
         const { data: rsvpData } = await supabase
           .from('rsvps')
           .select('event_id, player_id, status')
-          .in('event_id', rsvpEventIds);
+          .in('event_id', rsvpEventIds)
+          .limit(200);
 
         if (rsvpData) {
           const countMap: Record<string, number> = {};
@@ -202,10 +204,10 @@ export default function TeamDashboardScreen() {
     }, [load]),
   );
 
-  const handleRefresh = () => {
+  const handleRefresh = useThrottledCallback(() => {
     setRefreshing(true);
     load();
-  };
+  }, 2000);
 
   if (loading) {
     return (

@@ -67,6 +67,7 @@ export default function LineupBuilderScreen() {
   const [eventTitle, setEventTitle] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeLineupId, setActiveLineupId] = useState<string | null>(lineupIdParam ?? null);
+  const [lineupVersion, setLineupVersion] = useState<number | null>(null);
 
   const isEditing = !!activeLineupId;
   const formationData = getFormation(formation);
@@ -94,7 +95,8 @@ export default function LineupBuilderScreen() {
       const { data: rosterData, error: rosterError } = await supabase
         .from('team_players')
         .select('id, jersey_number, positions, player_id, profiles:player_id(id, full_name, email)')
-        .eq('team_id', teamId);
+        .eq('team_id', teamId)
+        .limit(60);
 
       if (rosterError) throw rosterError;
 
@@ -142,31 +144,33 @@ export default function LineupBuilderScreen() {
 
       // If editing, load existing lineup
       if (resolvedLineupId) {
-        console.log('[LineupBuilder] Loading lineup with ID:', resolvedLineupId);
+        if (__DEV__) console.log('[LineupBuilder] Loading lineup with ID:', resolvedLineupId);
         const { data: lineupData, error: lineupError } = await supabase
           .from('lineups')
           .select('*')
           .eq('id', resolvedLineupId)
           .single();
 
-        console.log('[LineupBuilder] Lineup data:', JSON.stringify(lineupData));
-        console.log('[LineupBuilder] Lineup error:', lineupError);
+        if (__DEV__) console.log('[LineupBuilder] Lineup data:', JSON.stringify(lineupData));
+        if (__DEV__) console.log('[LineupBuilder] Lineup error:', lineupError);
 
         if (lineupError) throw lineupError;
 
         if (lineupData) {
           setFormation(lineupData.formation || DEFAULT_FORMATION);
           setTitle(lineupData.title || '');
+          setLineupVersion(lineupData.version ?? null);
 
           // Load lineup players
           const { data: lpData, error: lpError } = await supabase
             .from('lineup_players')
             .select('player_id, position_key, is_starter')
-            .eq('lineup_id', resolvedLineupId);
+            .eq('lineup_id', resolvedLineupId)
+            .limit(30);
 
-          console.log('[LineupBuilder] Lineup players count:', lpData?.length);
-          console.log('[LineupBuilder] Lineup players error:', lpError);
-          console.log('[LineupBuilder] Lineup players data:', JSON.stringify(lpData));
+          if (__DEV__) console.log('[LineupBuilder] Lineup players count:', lpData?.length);
+          if (__DEV__) console.log('[LineupBuilder] Lineup players error:', lpError);
+          if (__DEV__) console.log('[LineupBuilder] Lineup players data:', JSON.stringify(lpData));
 
           if (lpError) throw lpError;
 
@@ -219,7 +223,7 @@ export default function LineupBuilderScreen() {
         setSubstitutes([]);
       }
     } catch (err) {
-      console.error('Error loading lineup data:', err);
+      if (__DEV__) console.error('Error loading lineup data:', err);
       showToast('error', 'Failed to load data');
     } finally {
       setLoading(false);
@@ -394,16 +398,27 @@ export default function LineupBuilderScreen() {
       };
 
       if (targetLineupId) {
-        const { error } = await supabase
+        // Optimistic locking: include version check to detect concurrent edits
+        let updateQuery = supabase
           .from('lineups')
           .update({
             title: lineupRecord.title,
             formation: lineupRecord.formation,
-            status: lineupRecord.status,
+            status: status === 'published' ? 'draft' : lineupRecord.status, // publish via RPC below
             event_id: lineupRecord.event_id,
           })
           .eq('id', targetLineupId);
+
+        if (lineupVersion !== null) {
+          updateQuery = updateQuery.eq('version', lineupVersion);
+        }
+
+        const { data: updatedRows, error } = await updateQuery.select('version');
         if (error) throw error;
+        if (!updatedRows || updatedRows.length === 0) {
+          throw new Error('This lineup was edited by another coach. Please go back and reopen it to get the latest version.');
+        }
+        setLineupVersion(updatedRows[0].version);
 
         // Delete old players and re-insert
         await supabase.from('lineup_players').delete().eq('lineup_id', targetLineupId);
@@ -436,6 +451,20 @@ export default function LineupBuilderScreen() {
           .from('lineup_players')
           .insert(playerRows);
         if (playersError) throw playersError;
+      }
+
+      // If publishing, use atomic RPC to validate + set status
+      if (status === 'published') {
+        const { data: publishResult, error: publishError } = await supabase
+          .rpc('publish_lineup', {
+            p_lineup_id: lineupRecord.id,
+            p_expected_version: lineupVersion,
+          });
+        if (publishError) throw publishError;
+        if (!publishResult.success) {
+          throw new Error(publishResult.error);
+        }
+        setLineupVersion(publishResult.version);
       }
 
       // Keep exactly one draft per team+event to avoid opening stale/empty duplicates.
@@ -471,7 +500,7 @@ export default function LineupBuilderScreen() {
         router.back();
       }
     } catch (err: any) {
-      console.error('Error saving lineup:', err);
+      if (__DEV__) console.error('Error saving lineup:', err);
       showToast('error', 'Failed to save', err.message);
     } finally {
       setSaving(false);

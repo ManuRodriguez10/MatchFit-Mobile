@@ -1,16 +1,18 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
+import * as ExpoCrypto from 'expo-crypto';
 import { Database } from '@/types/database';
 
-// Polyfill crypto.getRandomValues for Supabase and other libraries
+// Polyfill crypto.getRandomValues using expo-crypto (CSPRNG)
 if (!global.crypto) {
   global.crypto = {} as any;
 }
 if (!global.crypto.getRandomValues) {
   global.crypto.getRandomValues = (array: any) => {
+    const bytes = ExpoCrypto.getRandomBytes(array.length);
     for (let i = 0; i < array.length; i++) {
-      array[i] = Math.floor(Math.random() * 256);
+      array[i] = bytes[i];
     }
     return array;
   };

@@ -448,7 +448,7 @@ export default function CompleteProfileScreen() {
       // 5. Mark onboarding complete
       await completeOnboarding();
     } catch (error: any) {
-      console.error('Profile submit error:', JSON.stringify(error));
+      if (__DEV__) console.error('Profile submit error:', JSON.stringify(error));
       const msg =
         error?.message ??
         (typeof error === 'string' ? error : 'Something went wrong. Please try again.');

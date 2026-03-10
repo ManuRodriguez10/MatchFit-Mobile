@@ -21,6 +21,7 @@ import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import GradientText from '@/components/ui/GradientText';
 import { showToast } from '@/components/ui/Toast';
+import { useThrottledCallback } from '@/hooks/useThrottledCallback';
 
 interface EventDetail {
   id: string;
@@ -105,14 +106,16 @@ export default function EventDetailScreen() {
         const { data: allPlayers, count } = await supabase
           .from('team_players')
           .select('player_id, profiles:player_id(full_name)', { count: 'exact' })
-          .eq('team_id', eventData.team_id);
+          .eq('team_id', eventData.team_id)
+          .limit(60);
         setTotalPlayers(count || 0);
 
         // Fetch RSVPs with player names
         const { data: rsvpData } = await supabase
           .from('rsvps')
           .select('id, player_id, status, profiles:player_id(full_name)')
-          .eq('event_id', eventId);
+          .eq('event_id', eventId)
+          .limit(100);
 
         const mapped: RsvpRecord[] = (rsvpData || []).map((r: any) => ({
           id: r.id,
@@ -153,6 +156,11 @@ export default function EventDetailScreen() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleRefresh = useThrottledCallback(() => {
+    setRefreshing(true);
+    fetchData();
+  }, 2000);
 
   // Real-time RSVP subscription
   useEffect(() => {
@@ -290,7 +298,7 @@ export default function EventDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} tintColor="#fff" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" />
         }
       >
         {/* Header */}

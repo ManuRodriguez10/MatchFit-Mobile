@@ -446,7 +446,9 @@ export default function CreateEventScreen() {
     if (!eventType) e.eventType = 'Select an event type';
     if (eventType === 'game' && !gameVenue) e.gameVenue = 'Select home or away';
     if (!title.trim()) e.title = 'Title is required';
+    if (title.trim().length > 80) e.title = 'Title must be 80 characters or less';
     if (eventType === 'game' && !opponent.trim()) e.opponent = 'Opponent is required for games';
+    if (opponent.trim().length > 80) e.opponent = 'Opponent must be 80 characters or less';
 
     // Date
     if (!date.trim()) {
@@ -524,7 +526,7 @@ export default function CreateEventScreen() {
     }
 
     // Debug: log values being sent
-    console.log('CREATE EVENT DEBUG:', { teamId, userId: user.id, eventType, title });
+    if (__DEV__) console.log('CREATE EVENT DEBUG:', { teamId, userId: user.id, eventType, title });
 
     setLoading(true);
     try {

@@ -26,6 +26,10 @@ import Chip from '@/components/ui/Chip';
 import EmptyState from '@/components/ui/EmptyState';
 import { showToast } from '@/components/ui/Toast';
 import GradientText from '@/components/ui/GradientText';
+import LoadMoreButton from '@/components/ui/LoadMoreButton';
+
+const LINEUP_PAGE_SIZE = 20;
+const GAME_PAGE_SIZE = 30;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -141,6 +145,10 @@ export default function TeamLineupsScreen() {
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [monthPickerTarget, setMonthPickerTarget] = useState<'upcoming' | 'previous'>('upcoming');
   const [pickerYear, setPickerYear] = useState(upcomingMonth.year);
+  const [hasMoreLineups, setHasMoreLineups] = useState(false);
+  const [hasMoreGames, setHasMoreGames] = useState(false);
+  const [loadingMoreLineups, setLoadingMoreLineups] = useState(false);
+  const [loadingMoreGames, setLoadingMoreGames] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!teamId) {
@@ -162,40 +170,50 @@ export default function TeamLineupsScreen() {
       }
 
       const { data: lineupData, error: lineupError } = await lineupQuery
-        .order('updated_at', { ascending: false });
+        .order('updated_at', { ascending: false })
+        .range(0, LINEUP_PAGE_SIZE - 1);
 
       if (lineupError) throw lineupError;
+      setHasMoreLineups((lineupData || []).length === LINEUP_PAGE_SIZE);
 
-      // Get player counts for each lineup
-      const lineupsWithCounts: LineupWithCounts[] = await Promise.all(
-        (lineupData || []).map(async (lineup: any) => {
-          const { count: starterCount } = await supabase
-            .from('lineup_players')
-            .select('*', { count: 'exact', head: true })
-            .eq('lineup_id', lineup.id)
-            .eq('is_starter', true);
+      // Get player counts for all lineups in a single query
+      const lineupIds = (lineupData || []).map((l: any) => l.id);
+      const starterCountMap: Record<string, number> = {};
+      const subCountMap: Record<string, number> = {};
 
-          const { count: subCount } = await supabase
-            .from('lineup_players')
-            .select('*', { count: 'exact', head: true })
-            .eq('lineup_id', lineup.id)
-            .eq('is_starter', false);
+      if (lineupIds.length > 0) {
+        const { data: allPlayers } = await supabase
+          .from('lineup_players')
+          .select('lineup_id, is_starter')
+          .in('lineup_id', lineupIds)
+          .limit(500);
 
-          const event = lineup.events;
-          let eventTitle: string | null = null;
-          if (event) {
-            eventTitle = event.title || (event.opponent ? `vs ${event.opponent}` : event.event_type);
+        if (allPlayers) {
+          for (const p of allPlayers) {
+            if (p.is_starter) {
+              starterCountMap[p.lineup_id] = (starterCountMap[p.lineup_id] ?? 0) + 1;
+            } else {
+              subCountMap[p.lineup_id] = (subCountMap[p.lineup_id] ?? 0) + 1;
+            }
           }
+        }
+      }
 
-          return {
-            ...lineup,
-            starterCount: starterCount || 0,
-            subCount: subCount || 0,
-            eventTitle,
-            eventDate: event?.date || null,
-          };
-        }),
-      );
+      const lineupsWithCounts: LineupWithCounts[] = (lineupData || []).map((lineup: any) => {
+        const event = lineup.events;
+        let eventTitle: string | null = null;
+        if (event) {
+          eventTitle = event.title || (event.opponent ? `vs ${event.opponent}` : event.event_type);
+        }
+
+        return {
+          ...lineup,
+          starterCount: starterCountMap[lineup.id] ?? 0,
+          subCount: subCountMap[lineup.id] ?? 0,
+          eventTitle,
+          eventDate: event?.date || null,
+        };
+      });
 
       setLineups(lineupsWithCounts);
 
@@ -206,7 +224,10 @@ export default function TeamLineupsScreen() {
         .eq('team_id', teamId)
         .eq('event_type', 'game')
         .gte('date', today)
-        .order('date', { ascending: true });
+        .order('date', { ascending: true })
+        .range(0, GAME_PAGE_SIZE - 1);
+
+      setHasMoreGames((gamesData || []).length === GAME_PAGE_SIZE);
 
       const publishedEventIds = new Set(
         (lineupData || []).filter((l: any) => l.status === 'published').map((l: any) => l.event_id).filter(Boolean)
@@ -234,7 +255,7 @@ export default function TeamLineupsScreen() {
         setPreviousMonth(m);
       }
     } catch (err) {
-      console.error('Error fetching lineups:', err);
+      if (__DEV__) console.error('Error fetching lineups:', err);
       showToast('error', 'Failed to load lineups');
     } finally {
       setLoading(false);
@@ -245,6 +266,95 @@ export default function TeamLineupsScreen() {
   useFocusEffect(
     useCallback(() => { fetchData(); }, [fetchData]),
   );
+
+  const loadMoreLineups = useCallback(async () => {
+    if (!teamId || loadingMoreLineups || !hasMoreLineups) return;
+    setLoadingMoreLineups(true);
+    try {
+      const from = lineups.length;
+      let query = supabase
+        .from('lineups')
+        .select('*, events:event_id(title, opponent, date, event_type)')
+        .eq('team_id', teamId);
+      if (!isCoach) query = query.eq('status', 'published');
+
+      const { data } = await query
+        .order('updated_at', { ascending: false })
+        .range(from, from + LINEUP_PAGE_SIZE - 1);
+
+      const newData = data || [];
+      setHasMoreLineups(newData.length === LINEUP_PAGE_SIZE);
+
+      // Get player counts for new lineups
+      const newIds = newData.map((l: any) => l.id);
+      const starterMap: Record<string, number> = {};
+      const subMap: Record<string, number> = {};
+      if (newIds.length > 0) {
+        const { data: players } = await supabase
+          .from('lineup_players')
+          .select('lineup_id, is_starter')
+          .in('lineup_id', newIds)
+          .limit(500);
+        for (const p of players || []) {
+          if (p.is_starter) starterMap[p.lineup_id] = (starterMap[p.lineup_id] ?? 0) + 1;
+          else subMap[p.lineup_id] = (subMap[p.lineup_id] ?? 0) + 1;
+        }
+      }
+
+      const mapped: LineupWithCounts[] = newData.map((lineup: any) => {
+        const event = lineup.events;
+        let eventTitle: string | null = null;
+        if (event) eventTitle = event.title || (event.opponent ? `vs ${event.opponent}` : event.event_type);
+        return {
+          ...lineup,
+          starterCount: starterMap[lineup.id] ?? 0,
+          subCount: subMap[lineup.id] ?? 0,
+          eventTitle,
+          eventDate: event?.date || null,
+        };
+      });
+
+      setLineups(prev => [...prev, ...mapped]);
+    } catch {
+      showToast('error', 'Failed to load more lineups');
+    } finally {
+      setLoadingMoreLineups(false);
+    }
+  }, [teamId, lineups.length, loadingMoreLineups, hasMoreLineups, isCoach]);
+
+  const loadMoreGames = useCallback(async () => {
+    if (!teamId || loadingMoreGames || !hasMoreGames) return;
+    setLoadingMoreGames(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const from = upcomingGames.length;
+      const { data } = await supabase
+        .from('events')
+        .select('id, title, opponent, date, kickoff_time')
+        .eq('team_id', teamId)
+        .eq('event_type', 'game')
+        .gte('date', today)
+        .order('date', { ascending: true })
+        .range(from, from + GAME_PAGE_SIZE - 1);
+
+      const newGames = data || [];
+      setHasMoreGames(newGames.length === GAME_PAGE_SIZE);
+
+      const publishedIds = new Set(
+        lineups.filter(l => l.status === 'published').map(l => l.event_id).filter(Boolean)
+      );
+      const mapped: UpcomingGame[] = newGames.map((g: any) => ({
+        ...g,
+        hasLineup: publishedIds.has(g.id),
+      }));
+
+      setUpcomingGames(prev => [...prev, ...mapped]);
+    } catch {
+      showToast('error', 'Failed to load more games');
+    } finally {
+      setLoadingMoreGames(false);
+    }
+  }, [teamId, upcomingGames.length, loadingMoreGames, hasMoreGames, lineups]);
 
   // ---------------------------------------------------------------------------
   // Derived data
@@ -869,6 +979,18 @@ export default function TeamLineupsScreen() {
         {activeTab === 'next_game' && renderNextGame()}
         {activeTab === 'upcoming' && renderUpcoming()}
         {activeTab === 'previous' && renderPrevious()}
+
+        {/* Load More buttons */}
+        {hasMoreLineups && activeTab === 'previous' && (
+          <View style={{ marginTop: 8 }}>
+            <LoadMoreButton onPress={loadMoreLineups} loading={loadingMoreLineups} label="Load More Lineups" />
+          </View>
+        )}
+        {hasMoreGames && activeTab === 'upcoming' && (
+          <View style={{ marginTop: 8 }}>
+            <LoadMoreButton onPress={loadMoreGames} loading={loadingMoreGames} label="Load More Games" />
+          </View>
+        )}
       </ScrollView>
 
       {/* Month Picker Modal */}
