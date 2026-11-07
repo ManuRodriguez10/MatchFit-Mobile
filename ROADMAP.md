@@ -17,7 +17,7 @@ Planned work for MatchFit Mobile, roughly in priority order. Estimates are focus
 
 ## 2. Offline-first sync (≈12h)
 
-Work in progress on the `wip/offline-sync` branch (`SyncContext`, `useOfflineMutation`, a persisted mutation queue and a sync engine).
+A first prototype exists outside `main` (a sync context, an offline-mutation hook, a persisted mutation queue and a sync engine); the items below take it to production quality and merge it.
 
 | Item | Type | Est. |
 |------|------|------|

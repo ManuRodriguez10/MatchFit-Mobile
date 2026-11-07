@@ -53,12 +53,12 @@ npm ci
 
 ### 2. Set up the database
 
-Run every file in `supabase/migrations/` **in filename order** against your Supabase project. Either:
+Apply the timestamped migrations in `supabase/migrations/` (the `YYYYMMDDHHMMSS_*.sql` files) **in filename order**. Either:
 
 - **Supabase CLI**: `supabase link --project-ref <your-project-ref>` then `supabase db push`, or
-- **Dashboard**: open **SQL Editor** and paste each file in order.
+- **Dashboard**: open **SQL Editor** and paste each timestamped file in order.
 
-All migrations use `IF NOT EXISTS` / `CREATE OR REPLACE` and are safe to re-run. To check your setup, run `supabase/migrations/verify_setup.sql` in the SQL Editor; every check should show ✅.
+All migrations use `IF NOT EXISTS` / `CREATE OR REPLACE` and are safe to re-run. When they're all applied, run `supabase/migrations/verify_setup.sql` in the SQL Editor to check the setup; every check should show ✅.
 
 In **Authentication → Settings**, decide whether email confirmation is on. If it is, set the Site URL to the app's deep-link scheme (`matchfit://`).
 
@@ -118,6 +118,16 @@ __tests__/               Jest tests
 
 - **"Database error saving new user" on sign-up**: the migrations haven't all been applied. Run `verify_setup.sql` to see what's missing, then apply the missing migrations in order.
 - **`pod install` fails with `Unicode Normalization not appropriate for ASCII-8BIT`**: your shell isn't using a UTF-8 locale. Run `export LANG=en_US.UTF-8` and try again.
+- **`npm run ios` fails with `Can't determine id of Simulator app`**: Expo couldn't find the Simulator app to open (seen with Xcode 27.2). Build and run the steps separately instead:
+  ```bash
+  npx expo prebuild --platform ios
+  xcodebuild -workspace ios/MatchFit.xcworkspace -scheme MatchFit -configuration Debug \
+    -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath ios/build build
+  xcrun simctl install booted ios/build/Build/Products/Debug-iphonesimulator/MatchFit.app
+  xcrun simctl launch booted com.matchfit.mobile
+  npx expo start
+  ```
+  (Boot a simulator first with `xcrun simctl boot "iPhone 17 Pro"`.)
 - **Metro shows stale code**: `npx expo start -c` clears the bundler cache.
 - **Port 8081 already in use**: `lsof -ti:8081 | xargs kill -9`.
 
