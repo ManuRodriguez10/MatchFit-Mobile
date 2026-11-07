@@ -103,9 +103,9 @@ function parseInput(text: string): ParsedPlayer[] {
 
 const PLACEHOLDER = `Paste players, one per line:
 
-John Smith, john@email.com, 10, Forward
-Jane Doe, jane@email.com, 7, Midfielder
-Alex Brown, alex@email.com, 1, GK
+John Smith, john@example.com, 10, Forward
+Jane Doe, jane@example.com, 7, Midfielder
+Alex Brown, alex@example.com, 1, GK
 
 Or just names:
 John Smith
