@@ -1,251 +1,130 @@
 # MatchFit Mobile
 
-A React Native application built with Expo for team management and events.
+MatchFit is an iOS and Android app for running an amateur or youth soccer team. Coaches create a team, invite players with a code, schedule games and practices, collect RSVPs, and build match-day lineups on a visual pitch. Players join with the invite code, see what's coming up, and RSVP from their phone.
 
-## Tech Stack
+<p align="center">
+  <img src="docs/screenshots/01-login.png" width="200" alt="Sign-in screen" />
+  <img src="docs/screenshots/02-dashboard.png" width="200" alt="Coach team dashboard with player, event and lineup stats" />
+  <img src="docs/screenshots/03-lineup.png" width="200" alt="Published 4-2-3-1 lineup on the pitch view" />
+  <img src="docs/screenshots/04-calendar.png" width="200" alt="Team calendar" />
+</p>
 
-- **Expo** (~52.0.0) - React Native framework
-- **Expo Router** (v4) - File-based navigation
-- **TypeScript** - Type safety
-- **NativeWind** (v4) - TailwindCSS for React Native
-- **Supabase** - Backend, database, and authentication
-- **Expo Secure Store** - Secure session persistence
+## Who it's for
 
-## Prerequisites
+- **Coaches** who currently run their team through group chats and spreadsheets: they get one place for the roster, the schedule, who's available, and the starting XI.
+- **Players** (and parents of younger players) who just want to know when and where the next game is and tell the coach whether they're coming.
 
-Before you begin, ensure you have the following installed:
+## Features
 
-- **Node.js** (v18 or higher)
-- **npm** or **yarn**
-- **Expo CLI**: `npm install -g expo-cli`
-- **iOS Simulator** (Mac only) or **Android Studio** (for Android emulator)
-- **Expo Go app** (for physical device testing)
+- **Accounts and onboarding**: email sign-up and sign-in with password reset, then a role-specific onboarding flow for coaches and players.
+- **Teams**: create a team, invite players and assistant coaches with invite codes, and import a roster by pasting a list of names (optionally with email, jersey number and position).
+- **Events**: games and practices with recurrence, home/away venue, and edit and delete.
+- **RSVPs**: players respond to each event; coaches see who's in, out, or hasn't answered.
+- **Lineups**: pick a formation (4-3-3, 4-4-2, 3-5-2, 4-2-3-1, 3-4-3, 4-1-4-1), tap each position on the pitch to assign a player, and publish the lineup to the team. Published lineups are versioned.
+- **Reliability**: an offline banner when the network drops, a Sentry error boundary, and atomic database functions for multi-step writes such as creating a team or deleting one.
 
-## Installation
+## Tech stack
 
-### 1. Clone the repository
+| Layer | Tools |
+|-------|-------|
+| App | React Native 0.81, Expo SDK 54, Expo Router 6 (file-based navigation), TypeScript |
+| UI | NativeWind 4 (Tailwind for React Native), Reanimated 4, Expo Linear Gradient, Plus Jakarta Sans |
+| Backend | Supabase: Postgres, Auth, Row Level Security, SQL functions (RPCs) |
+| Storage | Expo Secure Store for the auth session, AsyncStorage |
+| Monitoring | Sentry (`@sentry/react-native`), optional |
+| Tests | Jest with `ts-jest`, 90 tests across utilities and hooks |
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 18 or newer and npm
+- macOS with Xcode and an iOS Simulator (for iOS), or Android Studio with an emulator (for Android)
+- CocoaPods (`brew install cocoapods`) for iOS builds
+- A free [Supabase](https://supabase.com) project
+
+### 1. Clone and install
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/ManuRodriguez10/MatchFit-Mobile.git
 cd MatchFit-Mobile
+npm ci
 ```
 
-### 2. Install dependencies
+### 2. Set up the database
+
+Run every file in `supabase/migrations/` **in filename order** against your Supabase project. Either:
+
+- **Supabase CLI**: `supabase link --project-ref <your-project-ref>` then `supabase db push`, or
+- **Dashboard**: open **SQL Editor** and paste each file in order.
+
+All migrations use `IF NOT EXISTS` / `CREATE OR REPLACE` and are safe to re-run. To check your setup, run `supabase/migrations/verify_setup.sql` in the SQL Editor; every check should show ✅.
+
+In **Authentication → Settings**, decide whether email confirmation is on. If it is, set the Site URL to the app's deep-link scheme (`matchfit://`).
+
+### 3. Configure environment variables
 
 ```bash
-npm install
+cp .env.example .env
 ```
 
-### 3. Set up Supabase
+Fill in `.env` from your Supabase dashboard (**Project Settings → API**):
 
-#### Create a Supabase project
+| Variable | Required | What it is |
+|----------|----------|------------|
+| `EXPO_PUBLIC_SUPABASE_URL` | Yes | Your project URL, e.g. `https://abcd1234.supabase.co` |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Yes | The project's **anon / publishable** key |
+| `EXPO_PUBLIC_SENTRY_DSN` | No | Sentry DSN for error reporting; Sentry stays off in development |
 
-1. Go to [supabase.com](https://supabase.com)
-2. Create a new project
-3. Wait for the database to be provisioned
+`.env` is gitignored. Never put the Supabase **service role** key in this app.
 
-#### Set up the database schema
+> **Why the anon key is in the app:** every `EXPO_PUBLIC_*` variable is compiled into the app bundle, so anyone with the app can read it. That's how Supabase is meant to be used: the anon key only grants what the Row Level Security policies allow, and RLS is enabled on every table (`profiles`, `teams`, `team_coaches`, `team_players`, `events`, `rsvps`, `coach_invites`, `lineups`, `lineup_players`). Anything that needs elevated access belongs in a Supabase Edge Function or SQL function, not in the client.
 
-**Option 1: Using Migration Files (Recommended)**
-
-1. Go to your Supabase project dashboard
-2. Navigate to **SQL Editor**
-3. Open and copy the contents of `supabase/migrations/20250217000000_initial_schema.sql`
-4. Paste and run the SQL in the SQL Editor
-5. Open and copy the contents of `supabase/migrations/20250217000001_rls_policies.sql`
-6. Paste and run the SQL in the SQL Editor
-
-**Option 2: Using Supabase CLI**
-
-If you have the Supabase CLI installed:
+### 4. Run it
 
 ```bash
-# Link your project (first time only)
-supabase link --project-ref your-project-ref
-
-# Apply migrations
-supabase db push
+npm run ios       # build and launch in the iOS Simulator
+npm run android   # build and launch in an Android emulator
+npm start         # start Metro only (if a dev build is already installed)
 ```
 
-See `supabase/migrations/README.md` for more details on migrations.
+The first `npm run ios` generates the native project, installs CocoaPods and builds the app, which takes a few minutes.
 
-### 4. Configure environment variables
-
-1. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Get your Supabase credentials from: `https://supabase.com/dashboard/project/_/settings/api`
-
-3. Update `.env` with your actual values:
-   ```env
-   EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-   EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
-   ```
-
-⚠️ **Important**: Never commit the `.env` file to version control!
-
-## Running the App
-
-### Start the development server
+### 5. Run the tests
 
 ```bash
-npx expo start
+npm test
 ```
 
-### Run on different platforms
-
-- **iOS Simulator**: Press `i` in the terminal or run `npm run ios`
-- **Android Emulator**: Press `a` in the terminal or run `npm run android`
-- **Web Browser**: Press `w` in the terminal or run `npm run web`
-- **Physical Device**: Scan the QR code with Expo Go app
-
-## Project Structure
+## Project structure
 
 ```
-MatchFit-Mobile/
-├── app/
-│   ├── (auth)/              # Authentication screens
-│   │   ├── _layout.tsx      # Auth stack navigator
-│   │   ├── login.tsx        # Login screen
-│   │   └── signup.tsx       # Sign up screen
-│   ├── (tabs)/              # Main tab navigation
-│   │   ├── _layout.tsx      # Tabs navigator
-│   │   ├── index.tsx        # Home screen
-│   │   ├── team.tsx         # Team screen
-│   │   ├── events.tsx       # Events screen
-│   │   └── profile.tsx      # Profile screen
-│   └── _layout.tsx          # Root layout with AuthProvider
-├── components/              # Reusable components
-│   └── LoadingScreen.tsx    # Loading spinner component
-├── contexts/                # React contexts
-│   └── AuthContext.tsx      # Authentication context & hooks
-├── lib/                     # Utilities and configurations
-│   └── supabase.ts          # Supabase client configuration
-├── types/                   # TypeScript type definitions
-│   └── database.ts          # Supabase database types
-├── constants/               # App constants
-├── assets/                  # Images, fonts, etc.
-├── .env                     # Environment variables (not committed)
-├── .env.example             # Environment variables template
-├── app.json                 # Expo configuration
-├── tailwind.config.js       # TailwindCSS configuration
-└── tsconfig.json            # TypeScript configuration
+app/                     Expo Router screens
+  (auth)/                Login and sign-up
+  (onboarding)/          First-run flow for coaches and players
+  (tabs)/                Main app
+    team/[teamId]/       Team dashboard, roster, events, lineups, settings
+components/              Shared UI (ui/) and lineup builder (lineup/)
+contexts/                AuthContext: session, profile, sign-in/out
+hooks/                   Network status, throttled callbacks
+lib/                     Supabase client, Sentry, invite-code helpers
+utils/                   Event date/recurrence helpers
+constants/               Colors, formations, UI tokens
+supabase/migrations/     SQL schema, RLS policies, RPCs, indexes
+__tests__/               Jest tests
 ```
-
-## Authentication Flow
-
-The app uses Supabase Auth with the following flow:
-
-1. **App Launch** → Loading screen checks auth state
-2. **Not Authenticated** → Redirects to `/login`
-3. **Sign In/Sign Up** → Creates session with Supabase
-4. **Authenticated** → Redirects to main tabs
-5. **Sign Out** → Clears session and redirects to `/login`
-
-### Using the Auth Context
-
-```typescript
-import { useAuth } from '@/contexts/AuthContext';
-
-function MyComponent() {
-  const { user, profile, signIn, signUp, signOut, loading } = useAuth();
-
-  // Sign in
-  await signIn('email@example.com', 'password');
-
-  // Sign up
-  await signUp('email@example.com', 'password', 'John Doe', 'athlete');
-
-  // Sign out
-  await signOut();
-}
-```
-
-## Available Scripts
-
-- `npm start` - Start Expo dev server
-- `npm run ios` - Run on iOS simulator
-- `npm run android` - Run on Android emulator
-- `npm run web` - Run in web browser
-
-## Development Guidelines
-
-### Styling
-
-- Use NativeWind (TailwindCSS) for styling
-- Example: `<View className="flex-1 items-center justify-center">`
-
-### Navigation
-
-- File-based routing with Expo Router
-- Use `router.push()`, `router.replace()`, or `Link` component
-- Protected routes handled automatically by `_layout.tsx`
-
-### Type Safety
-
-- Always define types in `types/` directory
-- Use TypeScript interfaces for props
-- Leverage Supabase generated types for database operations
 
 ## Troubleshooting
 
-### "Database error saving new user" during signup
+- **"Database error saving new user" on sign-up**: the migrations haven't all been applied. Run `verify_setup.sql` to see what's missing, then apply the missing migrations in order.
+- **`pod install` fails with `Unicode Normalization not appropriate for ASCII-8BIT`**: your shell isn't using a UTF-8 locale. Run `export LANG=en_US.UTF-8` and try again.
+- **Metro shows stale code**: `npx expo start -c` clears the bundler cache.
+- **Port 8081 already in use**: `lsof -ti:8081 | xargs kill -9`.
 
-This error typically means the database migrations haven't been applied. To fix:
+## Roadmap
 
-1. **Quick Verification (Recommended):**
-   - Go to your Supabase dashboard → SQL Editor
-   - Copy and run the contents of `supabase/migrations/verify_setup.sql`
-   - This will show you exactly what's missing
-
-2. **Apply migrations:**
-   - Copy the contents of `supabase/migrations/20250217000000_initial_schema.sql`
-   - Paste and run in Supabase SQL Editor
-   - Copy the contents of `supabase/migrations/20250217000001_rls_policies.sql`
-   - Paste and run in Supabase SQL Editor
-
-3. **Verify again:**
-   - Re-run `verify_setup.sql` to confirm everything is set up correctly
-   - All checks should show ✅
-
-4. **Common Issues:**
-   - **Trigger missing**: Re-run `initial_schema.sql` - the trigger is created at the end
-   - **RLS blocking**: Ensure `profiles_insert_own` policy exists (from RLS migration)
-   - **Function error**: Check Supabase logs for detailed error messages
-
-### Port already in use
-```bash
-# Kill the process using port 8081
-lsof -ti:8081 | xargs kill -9
-```
-
-### Metro bundler cache issues
-```bash
-npx expo start -c
-```
-
-### iOS Simulator not opening
-```bash
-# Install Xcode command line tools
-xcode-select --install
-```
-
-### Dependencies issues
-```bash
-# Clear cache and reinstall
-rm -rf node_modules package-lock.json
-npm install
-```
-
-## Contributing
-
-1. Create a feature branch
-2. Make your changes
-3. Test thoroughly
-4. Submit a pull request
+See [ROADMAP.md](ROADMAP.md) for planned work.
 
 ## License
 
-MIT
+[MIT](LICENSE) © 2026 Manuel Rodriguez

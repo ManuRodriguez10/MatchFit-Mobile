@@ -2,12 +2,13 @@
 
 Planned work for MatchFit Mobile, roughly in priority order. Estimates are focused working hours.
 
-**Total: ~58 hours**
+**Total: ~61 hours**
 
-## 1. Fix and harden (≈14h)
+## 1. Fix and harden (≈17h)
 
 | Item | Type | Est. |
 |------|------|------|
+| **"Today" is computed in UTC** (`new Date().toISOString().slice(0, 10)` in about 10 places across lineups, events and the dashboard), so in the evening in US time zones the app treats tomorrow as today: the calendar highlights the wrong day and games can be classed as next/past incorrectly. Add a local-date helper in `utils/`, replace every call site, and cover it with time-zone tests | Bug fix | 3h |
 | Fix the 62 TypeScript errors reported by `tsc --noEmit` (mostly in `app/`, plus `LinearGradient` color tuples in `StatCard`, `TeamCard`, `PlayerSelector`) | Bug fix | 4h |
 | Generate Supabase types with `supabase gen types typescript` so `lib/supabase.ts` gets a real `Database` type and queries are type-checked end to end | Refactor | 2h |
 | Add a `typecheck` and `lint` script (ESLint + `eslint-config-expo`) and fix what they flag | Tooling | 3h |
@@ -48,7 +49,7 @@ Current coverage is 90 Jest tests across 4 suites, all on pure utilities (format
 
 | Item | Type | Est. |
 |------|------|------|
-| Adopt Continuous Native Generation: move native config into `app.json` / config plugins and stop committing `ios/` (it currently differs from what `expo prebuild` generates for SDK 54) | Refactor | 2h |
+| Align Expo package patch versions with `npx expo install --check` (expo, expo-router, expo-font and others are a few patches behind) and investigate the one-off "Network request failed" error on cold start | Maintenance | 2h |
 | Verify and fix the Android build on an emulator | Bug fix | 2h |
 | EAS Build profiles (development / preview / production) and a TestFlight preview build | Release | 2h |
 

@@ -35,7 +35,8 @@
       "expo-router",
       "expo-asset",
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/withMinimumPodDeploymentTarget"
     ],
     "experiments": {
       "typedRoutes": true
